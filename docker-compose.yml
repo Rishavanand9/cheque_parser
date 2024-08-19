@@ -14,7 +14,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - FLASK_ENV=production
-      - DATABASE_URL=postgresql://username:password@db/dbname
+      - DATABASE_URL=postgresql://admin:admin@89123@db/cheque_parser
     expose:
       - 5050
     depends_on:
@@ -39,14 +39,14 @@ services:
     volumes:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
-    command: certonly --webroot -w /var/www/certbot --force-renewal --email your-email@example.com -d yourdomain.com --agree-tos
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email your-email@example.com -d 172.105.50.148 --agree-tos
 
   db:
     image: postgres:13
     environment:
-      - POSTGRES_USER=username
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=dbname
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin@89123
+      - POSTGRES_DB=cheque_parser
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
