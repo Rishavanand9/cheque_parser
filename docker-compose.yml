@@ -1,29 +1,25 @@
-version: '3.8'
-
 services:
+ 
   frontend:
     build:
-      context: ./frontend
+      context: /root/cheque_parser/frontend
       dockerfile: Dockerfile
-    volumes:
-      - react_build:/app/build
-
+    ports:
+      - "80:80"
+      
   backend:
     build:
-      context: ./backend
+      context: /root/cheque_parser/backend
       dockerfile: Dockerfile
     environment:
       - FLASK_ENV=production
       - DATABASE_URL=postgresql://admin:admin@89123@db/cheque_parser
     expose:
       - 5050
-    depends_on:
-      - db
 
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
@@ -33,6 +29,7 @@ services:
     depends_on:
       - frontend
       - backend
+
 
   certbot:
     image: certbot/certbot
@@ -51,5 +48,5 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  react_build:
   postgres_data:
+  react_build:
