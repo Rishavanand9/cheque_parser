@@ -49,11 +49,18 @@ def process_image_with_vision_api(image_path):
     # Process the response and extract relevant information
     # This is a simplified example; you may need to adjust based on your specific cheque layout
     extracted_data = {
-        'date': '',
-        'payee': '',
-        'amount': '',
-        'account_number': '',
-        'cheque_number': ''
+        id: "",
+        bank_name: "",
+        date: "",
+        ifsc_code: "",
+        amount_in_words: "",
+        amount_in_digits: "",
+        payer: "",
+        account_number: "",
+        cheque_number: "",
+        image: "",
+        created_at: "",
+        updated_at: ""
     }
 
     for page in response.full_text_annotation.pages:

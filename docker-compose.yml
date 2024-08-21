@@ -2,14 +2,14 @@ services:
  
   frontend:
     build:
-      context: /root/cheque_parser/frontend
+      context: ./frontend
       dockerfile: Dockerfile
     ports:
       - "80:80"
       
   backend:
     build:
-      context: /root/cheque_parser/backend
+      context: ./backend
       dockerfile: Dockerfile
     environment:
       - FLASK_ENV=production
