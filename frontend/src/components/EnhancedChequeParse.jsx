@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './EnhancedChequeParse.css';
 
 const EnhancedChequeParse = () => {
@@ -7,6 +7,11 @@ const EnhancedChequeParse = () => {
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [annotations, setAnnotations] = useState([]);
+  const [popupPosition, setPopupPosition] = useState(null);
+  const imageRef = useRef(null);
+
+  const fieldOptions = ['amount', 'name', 'chequenumber', 'bankaccountno'];
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
@@ -45,6 +50,7 @@ const EnhancedChequeParse = () => {
       if (data.status === 'success') {
         setResults(data.data);
         setCurrentPage(0);
+        setAnnotations([]); // Clear annotations when new file is uploaded
       } else {
         throw new Error(data.message || 'Failed to parse cheque.');
       }
@@ -83,6 +89,30 @@ const EnhancedChequeParse = () => {
     }
   };
 
+  const handleImageClick = (e) => {
+    if (imageRef.current) {
+      const { left, top } = imageRef.current.getBoundingClientRect();
+      const x = e.clientX - left;
+      const y = e.clientY - top;
+      setPopupPosition({ x, y });
+    }
+  };
+
+  const handleAnnotationSubmit = (field, value) => {
+    if (field && value && popupPosition) {
+      const newAnnotation = { ...popupPosition, field, value };
+      setAnnotations([...annotations, newAnnotation]);
+      
+      // Update the results state
+      const updatedResults = [...results];
+      updatedResults[currentPage].extracted_data[field] = value;
+      setResults(updatedResults);
+
+      // Close the popup
+      setPopupPosition(null);
+    }
+  };
+
   const renderContent = () => {
     if (results.length === 0) {
       return <p className="no-data">No data to display. Please parse a cheque first.</p>;
@@ -99,11 +129,66 @@ const EnhancedChequeParse = () => {
           <p className="full-text">{currentData.full_text}</p>
         </div>
         <div className="card image-section">
-          <img
-            src={`data:image/jpeg;base64,${currentData.image_data}`}
-            alt={`Cheque ${currentPage + 1}`}
-            className="cheque-image"
-          />
+          <div className="relative">
+            <img
+              ref={imageRef}
+              src={`data:image/jpeg;base64,${currentData.image_data}`}
+              alt={`Cheque ${currentPage + 1}`}
+              className="cheque-image"
+              onClick={handleImageClick}
+            />
+            <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
+              {annotations.map((anno, index) => (
+                <g key={index}>
+                  <line
+                    x1={anno.x}
+                    y1={anno.y}
+                    x2={anno.x}
+                    y2={anno.y + 30}
+                    stroke="red"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={anno.x}
+                    y={anno.y + 45}
+                    fill="red"
+                    fontSize="12"
+                    textAnchor="middle"
+                  >
+                    {anno.field}: {anno.value}
+                  </text>
+                </g>
+              ))}
+            </svg>
+            {popupPosition && (
+              <div 
+                className="annotation-popup"
+                style={{ 
+                  position: 'absolute', 
+                  left: popupPosition.x, 
+                  top: popupPosition.y 
+                }}
+              >
+                <select onChange={(e) => handleAnnotationSubmit(e.target.value, document.getElementById('annotation-value').value)}>
+                  <option value="">Select Field</option>
+                  {fieldOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                <input 
+                  id="annotation-value"
+                  type="text"
+                  placeholder="Enter value"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleAnnotationSubmit(document.querySelector('.annotation-popup select').value, e.target.value);
+                    }
+                  }}
+                />
+                <button onClick={() => setPopupPosition(null)}>Cancel</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
