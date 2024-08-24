@@ -1,150 +1,172 @@
-import os
-from flask import Flask, request, jsonify, send_file
+import base64
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+import os
+import tempfile
 from pdf2image import convert_from_path
-from google.cloud import vision
+import logging
+import time
+from google.cloud import documentai_v1 as documentai
+from google.oauth2 import service_account
+import concurrent.futures
 import io
-import json
-from sqlalchemy import create_engine, Column, Integer, String, JSON
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import pandas as pd
-from io import BytesIO
+
+# Import the database functions
+from database_utils import insert_parsed_cheque, get_all_parsed_cheques
 
 app = Flask(__name__)
 CORS(app)
 
-# Configure upload folder
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Configure Google Cloud credentials
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'path/to/your/google-credentials.json'
+def get_text_from_google_api(image_data):
+    logger.info("Document AI is processing the image")
+    
+    credentials = service_account.Credentials.from_service_account_file('/root/google_service_account.json')
+    client = documentai.DocumentProcessorServiceClient(credentials=credentials)
+    name = client.processor_path('document-project-422815', 'us', 'f1b5ccccf850a629')
 
-# Configure PostgreSQL database
-DATABASE_URL = "postgresql://username:password@localhost/dbname"
-engine = create_engine(DATABASE_URL)
-Base = declarative_base()
+    document = {"content": image_data, "mime_type": "image/jpeg"}
+    
+    # Add a prompt to the Document AI request
+    prompt = """Please extract the following information from the cheque image:
+    - Bank name
+    - Date
+    - IFSC code
+    - Amount in words
+    - Amount in digits
+    - Payer name
+    - Account number
+    - Cheque number
+    Provide the extracted information in a structured JSON format."""
 
-class ChequeData(Base):
-    __tablename__ = 'cheque_data'
+    # Simplified request without AdvancedOcrOptions
+    request = documentai.ProcessRequest(
+        name=name,
+        raw_document=document,
+        field_mask="text,entities"
+    )
+    
+    result = client.process_document(request=request)
 
-    id = Column(Integer, primary_key=True)
-    data = Column(JSON)
-
-Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-
-def process_image_with_vision_api(image_path):
-    client = vision.ImageAnnotatorClient()
-
-    with io.open(image_path, 'rb') as image_file:
-        content = image_file.read()
-
-    image = vision.Image(content=content)
-    response = client.document_text_detection(image=image)
-
-    # Process the response and extract relevant information
-    # This is a simplified example; you may need to adjust based on your specific cheque layout
     extracted_data = {
-        id: "",
-        bank_name: "",
-        date: "",
-        ifsc_code: "",
-        amount_in_words: "",
-        amount_in_digits: "",
-        payer: "",
-        account_number: "",
-        cheque_number: "",
-        image: "",
-        created_at: "",
-        updated_at: ""
+        "bank_name": "",
+        "date": "",
+        "ifsc_code": "",
+        "amount_in_words": "",
+        "amount_in_digits": "",
+        "payer": "",
+        "account_number": "",
+        "cheque_number": "",
     }
 
-    for page in response.full_text_annotation.pages:
-        for block in page.blocks:
-            for paragraph in block.paragraphs:
-                for word in paragraph.words:
-                    word_text = ''.join([symbol.text for symbol in word.symbols])
-                    # Add logic to identify and extract specific fields based on their position or context
-                    # This is a placeholder and should be customized based on your cheque layout
-                    if 'DATE' in word_text:
-                        extracted_data['date'] = word_text.replace('DATE', '').strip()
-                    elif 'PAY' in word_text:
-                        extracted_data['payee'] = word_text.replace('PAY', '').strip()
-                    # Add more conditions for other fields
+    for entity in result.document.entities:
+        if entity.type_ in extracted_data:
+            extracted_data[entity.type_] = entity.mention_text
 
-    return extracted_data
+    return extracted_data, result.document.text
+
+def process_image_with_timeout(image_path, timeout=30):
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(process_image, image_path)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            logger.warning(f"Document AI processing timed out for {image_path}")
+            return None
+
+def process_image(image_path):
+    try:
+        with open(image_path, "rb") as image_file:
+            image_data = image_file.read()
+        
+        extracted_data, full_text = get_text_from_google_api(image_data)
+        
+        # Encode image to base64 for frontend display
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        
+        return {
+            "extracted_data": extracted_data,
+            "full_text": full_text,
+            "image_data": image_base64,
+            "processing_status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error processing image: {str(e)}")
+        return {"error": str(e), "processing_status": "error"}
 
 @app.route('/api/parse-cheque', methods=['POST'])
 def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-    if file and file.filename.lower().endswith('.pdf'):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
+    logger.info("Received request to /api/parse-cheque")
+    
+    try:
+        if 'file' not in request.files:
+            return jsonify({"status": "error", "message": "No file part"}), 400
         
-        # Convert PDF to images
-        images = convert_from_path(file_path)
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"status": "error", "message": "No selected file"}), 400
         
-        results = []
-        for i, image in enumerate(images):
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], f'page_{i}.jpg')
-            image.save(image_path, 'JPEG')
+        if file and file.filename.lower().endswith('.pdf'):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            logger.info(f"Saved uploaded file: {file_path}")
             
-            # Process image with Google Vision API
-            extracted_data = process_image_with_vision_api(image_path)
-            results.append(extracted_data)
-            
-            # Clean up temporary image file
-            os.remove(image_path)
-        
-        # Clean up uploaded PDF file
-        os.remove(file_path)
-        
-        return jsonify(results)
-    else:
-        return jsonify({"error": "Invalid file type. Please upload a PDF."}), 400
+            try:
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    images = convert_from_path(file_path)
+                    logger.info(f"Converted PDF to {len(images)} images")
+                    
+                    results = []
+                    for i, image in enumerate(images):
+                        image_path = os.path.join(temp_dir, f'cheque_{i}.jpg')
+                        image.save(image_path, 'JPEG')
+                        
+                        result = process_image_with_timeout(image_path)
+                        if result:
+                            results.append(result)
+                        else:
+                            # If processing failed, include a thumbnail of the image
+                            image.thumbnail((100, 100))
+                            buffered = io.BytesIO()
+                            image.save(buffered, format="JPEG")
+                            img_data = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                            results.append({
+                                "image_data": img_data,
+                                "processing_status": "error",
+                                "error": "Processing timed out or failed"
+                            })
+                    
+                    logger.info(f"Processed {len(results)} cheque images")
 
-@app.route('/api/save-data', methods=['POST'])
-def save_data():
-    data = request.json
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-    
-    session = Session()
-    new_cheque_data = ChequeData(data=data)
-    session.add(new_cheque_data)
-    session.commit()
-    session.close()
-    
-    return jsonify({"message": "Data saved successfully"}), 200
+                os.remove(file_path)
+                return jsonify({"status": "success", "data": results})
+            except Exception as e:
+                logger.error(f"Error processing PDF: {str(e)}")
+                return jsonify({"status": "error", "message": f"Error processing PDF: {str(e)}"}), 500
+        else:
+            return jsonify({"status": "error", "message": "Invalid file type. Please upload a PDF."}), 400
+    except Exception as e:
+        logger.error(f"Unexpected error in upload_file: {str(e)}")
+        return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
 
-@app.route('/api/export-excel', methods=['POST'])
-def export_excel():
-    data = request.json
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-    
-    df = pd.DataFrame(data)
-    
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Cheque Data', index=False)
-    output.seek(0)
-    
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name='cheque_data.xlsx',
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
+@app.route('/api/save-to-db', methods=['POST'])
+def save_to_db():
+    try:
+        data = request.json
+        for item in data:
+            insert_parsed_cheque(item['extracted_data'])
+        return jsonify({"status": "success", "message": "Data saved to database"})
+    except Exception as e:
+        logger.error(f"Error saving to database: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5050, debug=True)
