@@ -92,18 +92,18 @@ const EnhancedChequeParse = () => {
 
     return (
       <div className="content-wrapper">
-        <div className="image-section">
-          <img 
-            src={`data:image/jpeg;base64,${currentData.image_data}`} 
-            alt={`Cheque ${currentPage + 1}`} 
-            className="cheque-image"
-          />
-        </div>
-        <div className="data-section">
+        <div className="card data-section">
           <h3>Extracted Data</h3>
           <pre className="json-data">{JSON.stringify(currentData.extracted_data, null, 2)}</pre>
           <h3>Full Text</h3>
           <p className="full-text">{currentData.full_text}</p>
+        </div>
+        <div className="card image-section">
+          <img
+            src={`data:image/jpeg;base64,${currentData.image_data}`}
+            alt={`Cheque ${currentPage + 1}`}
+            className="cheque-image"
+          />
         </div>
       </div>
     );
@@ -148,7 +148,7 @@ const EnhancedChequeParse = () => {
               >
                 Previous
               </button>
-              <span>{`Page ${currentPage + 1} of ${results.length}`}</span>
+              <span>Page {currentPage + 1} of {results.length}</span>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(results.length - 1, prev + 1))}
                 disabled={currentPage === results.length - 1}

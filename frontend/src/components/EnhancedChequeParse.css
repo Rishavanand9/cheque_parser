@@ -1,177 +1,196 @@
 :root {
-    --primary-color: #3498db;
-    --secondary-color: #2c3e50;
-    --background-color: #ecf0f1;
-    --text-color: #333;
-    --border-color: #bdc3c7;
-    --error-color: #e74c3c;
-    --success-color: #2ecc71;
-  }
-  
-  body {
-    font-family: Arial, sans-serif;
-    line-height: 1.6;
-    color: var(--text-color);
-    background-color: var(--background-color);
-    margin: 0;
-    padding: 0;
-  }
-  
-  .dashboard {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-  }
-  
-  .header {
-    background-color: var(--secondary-color);
-    color: white;
-    padding: 1rem;
-    text-align: center;
-  }
-  
+  --primary-color: #3498db;
+  --secondary-color: #2c3e50;
+  --background-color: #ecf0f1;
+  --text-color: #333;
+  --border-color: #bdc3c7;
+  --error-color: #e74c3c;
+  --success-color: #2ecc71;
+  --card-background: #ffffff;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+}
+
+.header {
+  background-color: var(--secondary-color);
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+
+.main-content {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 2rem;
+  padding: 2rem;
+}
+
+.sidebar {
+  background-color: var(--card-background);
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.main-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.content-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.card {
+  background-color: var(--card-background);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.image-section {
+  grid-column: 2;
+}
+
+.data-section {
+  grid-column: 1;
+}
+
+.cheque-image {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.json-data, .full-text {
+  background-color: #f7f7f7;
+  border: 1px solid var(--border-color);
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.file-input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.button {
+  display: block;
+  width: 100%;
+  padding: 0.75rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  transition: background-color 0.3s ease;
+  font-size: 1rem;
+}
+
+.button:hover {
+  background-color: #2980b9;
+}
+
+.button.disabled {
+  background-color: var(--border-color);
+  cursor: not-allowed;
+}
+
+.error-message {
+  color: var(--error-color);
+  margin-top: 1rem;
+}
+
+.loading-spinner {
+  border: 4px solid var(--border-color);
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 1rem auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: var(--card-background);
+  border-top: 1px solid var(--border-color);
+  position: sticky;
+  bottom: 0;
+}
+
+.pagination button {
+  width: 120px;
+}
+
+.no-data {
+  text-align: center;
+  color: var(--secondary-color);
+  font-style: italic;
+}
+
+h2, h3 {
+  color: var(--secondary-color);
+  margin-top: 0;
+}
+
+.full-text {
+  line-height: 1.8;
+}
+
+.json-data {
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.success-message {
+  color: var(--success-color);
+  margin-top: 1rem;
+  font-weight: bold;
+}
+
+@media (max-width: 1024px) {
   .main-content {
-    display: flex;
-    flex: 1;
+    grid-template-columns: 1fr;
   }
-  
-  .sidebar {
-    background-color: white;
-    padding: 1rem;
-    width: 250px;
-    border-right: 1px solid var(--border-color);
-  }
-  
-  .main-section {
-    flex: 1;
-    padding: 1rem;
-    overflow-y: auto;
-  }
-  
+
   .content-wrapper {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
+    grid-template-columns: 1fr;
   }
-  
+
   .image-section, .data-section {
-    flex: 1;
-    min-width: 300px;
+    grid-column: auto;
   }
-  
-  .cheque-image {
-    max-width: 100%;
-    height: auto;
-    border: 1px solid var(--border-color);
-  }
-  
-  .json-data, .full-text {
-    background-color: white;
-    border: 1px solid var(--border-color);
-    padding: 1rem;
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-  }
-  
-  .file-input {
-    display: block;
-    width: 100%;
-    padding: 0.5rem;
-    margin-bottom: 1rem;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-  }
-  
-  .button {
-    display: block;
-    width: 100%;
-    padding: 0.5rem;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-bottom: 1rem;
-    transition: background-color 0.3s ease;
-  }
-  
-  .button:hover {
-    background-color: #2980b9;
-  }
-  
-  .button.disabled {
-    background-color: var(--border-color);
-    cursor: not-allowed;
-  }
-  
-  .error-message {
-    color: var(--error-color);
-    margin-top: 1rem;
-  }
-  
-  .loading-spinner {
-    border: 4px solid var(--border-color);
-    border-top: 4px solid var(--primary-color);
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-    margin: 1rem auto;
-  }
-  
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  
-  .pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 1rem;
-  }
-  
-  .no-data {
-    text-align: center;
-    color: var(--secondary-color);
-    font-style: italic;
-  }
-  
-  h2, h3 {
-    color: var(--secondary-color);
-  }
-  
-  /* Responsive design */
-  @media (max-width: 768px) {
-    .main-content {
-      flex-direction: column;
-    }
-  
-    .sidebar {
-      width: 100%;
-      border-right: none;
-      border-bottom: 1px solid var(--border-color);
-    }
-  
-    .image-section, .data-section {
-      width: 100%;
-    }
-  }
-  
-  /* Additional styles for better readability */
-  .full-text {
-    line-height: 1.8;
-  }
-  
-  .json-data {
-    font-family: monospace;
-    font-size: 0.9rem;
-  }
-  
-  /* Success message style */
-  .success-message {
-    color: var(--success-color);
-    margin-top: 1rem;
-    font-weight: bold;
-  }
+}

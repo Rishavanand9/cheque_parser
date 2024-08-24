@@ -11,6 +11,8 @@ from google.cloud import documentai_v1 as documentai
 from google.oauth2 import service_account
 import concurrent.futures
 import io
+import re
+
 
 # Import the database functions
 from database_utils import insert_parsed_cheque, get_all_parsed_cheques
@@ -34,19 +36,7 @@ def get_text_from_google_api(image_data):
 
     document = {"content": image_data, "mime_type": "image/jpeg"}
     
-    # Add a prompt to the Document AI request
-    prompt = """Please extract the following information from the cheque image:
-    - Bank name
-    - Date
-    - IFSC code
-    - Amount in words
-    - Amount in digits
-    - Payer name
-    - Account number
-    - Cheque number
-    Provide the extracted information in a structured JSON format."""
-
-    # Simplified request without AdvancedOcrOptions
+    # Simplified request
     request = documentai.ProcessRequest(
         name=name,
         raw_document=document,
@@ -66,12 +56,78 @@ def get_text_from_google_api(image_data):
         "cheque_number": "",
     }
 
+    # Process entities
     for entity in result.document.entities:
         if entity.type_ in extracted_data:
             extracted_data[entity.type_] = entity.mention_text
 
-    return extracted_data, result.document.text
+    # If entities didn't provide all information, try to extract from full text
+    full_text = result.document.text
+    lines = full_text.split('\n')
+    
+    if not all(extracted_data.values()):
+        # Bank name (usually at the top of the cheque)
+        if not extracted_data["bank_name"]:
+            bank_lines = [line.strip() for line in lines if "BANK" in line.upper()]
+            if bank_lines:
+                extracted_data["bank_name"] = bank_lines[0]
+            else:
+                extracted_data["bank_name"] = lines[0].strip() if lines else ""
 
+        # Date
+        if not extracted_data["date"]:
+            date_match = re.search(r'\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b', full_text)
+            if date_match:
+                day, month, year = date_match.groups()
+                extracted_data["date"] = f"{day.zfill(2)}/{month.zfill(2)}/{year.zfill(4)}"
+
+        # IFSC code
+        if not extracted_data["ifsc_code"]:
+            ifsc_match = re.search(r'IFSC\s*:?\s*([A-Z]{4}[0-9]{7})', full_text, re.IGNORECASE)
+            if ifsc_match:
+                extracted_data["ifsc_code"] = ifsc_match.group(1)
+
+        # Amount in words
+        if not extracted_data["amount_in_words"]:
+            amount_words_match = re.search(r'(?:Rupees|Rs\.?)\s+(.*?)\s+(?:only|ONLY)', full_text, re.IGNORECASE)
+            if amount_words_match:
+                extracted_data["amount_in_words"] = amount_words_match.group(1).strip()
+
+        # Amount in digits
+        if not extracted_data["amount_in_digits"]:
+            amount_digits_match = re.search(r'₹?\s*(\d+(:?\,\d+)*(:?\.\d{2})?)', full_text)
+            if amount_digits_match:
+                extracted_data["amount_in_digits"] = amount_digits_match.group(1).replace(',', '')
+
+        # Payer name
+        if not extracted_data["payer"]:
+            pay_match = re.search(r'Pay\s+(.*?)\s+(?:or\s+bearer|OR\s+BEARER)', full_text, re.IGNORECASE)
+            if pay_match:
+                extracted_data["payer"] = pay_match.group(1).strip()
+
+        # Account number (updated to check for numbers >= 12 digits)
+        if not extracted_data["account_number"]:
+            account_matches = re.findall(r'\b\d{12,}\b', full_text)
+            if account_matches:
+                extracted_data["account_number"] = max(account_matches, key=len)
+
+        # Cheque number
+        if not extracted_data["cheque_number"]:
+            cheque_pattern = r'[⑈⑆](\d{6})[⑈⑆]\s*(\d{9})[⑈⑆]\s*(\d{6})[⑈⑆]\s*(\d{2})'
+            cheque_match = re.search(cheque_pattern, full_text)
+            if cheque_match:
+                extracted_data["cheque_number"] = ''.join(cheque_match.groups())
+            else:
+                # Fallback: look for any sequence of 6 digits that might represent the cheque number
+                digit_sequences = re.findall(r'\b\d{6}\b', full_text)
+                if digit_sequences:
+                    extracted_data["cheque_number"] = digit_sequences[0]  # Use the first 6-digit sequence
+
+    # Clean up extracted data
+    for key, value in extracted_data.items():
+        extracted_data[key] = value.strip() if isinstance(value, str) else value
+
+    return extracted_data, '\n'.join(lines)  # Return extracted data and full text separated by new lines
 def process_image_with_timeout(image_path, timeout=30):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future = executor.submit(process_image, image_path)
