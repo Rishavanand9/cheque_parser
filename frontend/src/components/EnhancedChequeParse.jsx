@@ -22,17 +22,17 @@ const EnhancedChequeParse = () => {
 
   // Configuration for cheque fields
   const fieldConfig = {
-    date: { label: 'Date', x: 700, y: 50, color: '#3357FF' },
-    id: { label: 'ID', x: 50, y: 30, color: '#FF5733' },
-    bank_name: { label: 'Bank Name', x: 100, y: 60, color: '#20B2AA' },
-    ifsc_code: { label: 'IFSC Code', x: 600, y: 80, color: '#20B2AA' },
-    amount_in_words: { label: 'Amount in Words', x: 100, y: 150, color: '#FF33FF' },
-    amount_in_digits: { label: 'Amount in Digits', x: 600, y: 150, color: '#33FFFF' },
-    payer: { label: 'Payer', x: 100, y: 100, color: '#FFA500' },
-    account_number: { label: 'Account Number', x: 110, y: 220, color: '#8A2BE2' },
-    cheque_number: { label: 'Cheque Number', x: 500, y: 350, color: '#20B2AA' },
-    party_code: { label: 'Party Code', x: 500000, y: 100000, color: '#DC143C' },
-    party_name: { label: 'Party Name', x: 500000, y: 100000, color: '#4B0082' }
+    date: { label: 'Date', x: 900, y: 30, color: '#3357FF' },
+    // id: { label: 'ID', x: 50, y: 30, color: '#FF5733' },
+    bank_name: { label: 'Bank Name', x: 100, y: 10, color: '#20B2AA' },
+    ifsc_code: { label: 'IFSC Code', x:500, y: 20, color: '#20B2AA' },
+    amount_in_words: { label: 'Amount in Words', x: 300, y: 130, color: '#FF33FF' },
+    amount_in_digits: { label: 'Amount in Digits', x: 800, y: 180, color: '#33FFFF' },
+    payer: { label: 'Payer', x: 400, y: 70, color: '#FFA500' },
+    account_number: { label: 'Account Number', x: 300, y: 220, color: '#8A2BE2' },
+    cheque_number: { label: 'Cheque Number', x: 600, y: 400, color: '#20B2AA' },
+    party_code: { label: 'Party Code',  x: 850, y: 380, color: '#DC143C' },
+    party_name: { label: 'Party Name',  x: 850, y: 430, color: '#4B0082' }
   };
 
   const [fields, setFields] = useState(
@@ -149,7 +149,7 @@ const EnhancedChequeParse = () => {
       svg.selectAll("*").remove(); // Clear previous content
 
       const width = 1000;
-      const height = 600;
+      const height = 500;
 
       svg
         .attr("width", width)
@@ -159,11 +159,11 @@ const EnhancedChequeParse = () => {
       // Create an image element
       svg.append("image")
         .attr("xlink:href", `data:image/jpeg;base64,${results[currentPage].image_data}`)
-        .attr("width", 800)
+        .attr("width", width)
         .attr("height", 400);
 
-      // Add dots, arrows, and input fields for each field
-      Object.entries(fieldConfig).forEach(([field, config], index) => {
+      // Add dots and input fields for each field
+      Object.entries(fieldConfig).forEach(([field, config]) => {
         // Add dot on the cheque
         svg.append("circle")
           .attr("cx", config.x)
@@ -171,63 +171,42 @@ const EnhancedChequeParse = () => {
           .attr("r", 5)
           .attr("fill", config.color);
 
-        // Calculate input position
-        const inputX = 820;
-        const inputY = 50 + index * 40;
-
-        // Add arrow
-        svg.append("path")
-          .attr("d", `M${config.x},${config.y} C${(config.x + inputX) / 2},${config.y} ${(config.x + inputX) / 2},${inputY} ${inputX - 10},${inputY + 15}`)
-          .attr("stroke", config.color)
-          .attr("fill", "none")
-          .attr("stroke-width", 2)
-          .attr("marker-end", "url(#arrowhead)");
-
-        // Add input field
+        // Add input field below the dot
         const foreignObject = svg.append("foreignObject")
-          .attr("x", inputX)
-          .attr("y", inputY)
-          .attr("width", 160)
-          .attr("height", 30);
+          .attr("x", config.x - 75)  // Center the input field below the dot
+          .attr("y", config.y + 10)  // Position it just below the dot
+          .attr("width", 200)
+          .attr("height", 45);
 
-        const input = foreignObject.append("xhtml:input")
+          const input = foreignObject.append("xhtml:input")
           .attr("type", "text")
           .attr("value", fields[field] || '')
           .attr("placeholder", config.label)
           .style("width", "100%")
           .style("height", "100%")
-          .style("font-size", "14px")
+          .style("font-size", "12px")
           .style("padding", "5px")
-          .style("border", `2px solid ${config.color}`)
-          .style("border-radius", "5px")
-          .style("color", "#333");
+          .style("border", "none")
+          .style("border-radius", "3px")
+          .style("color", "white")
+          .style("background-color", "rgba(0, 0, 0, 0.8)")  // Semi-transparent black background
+          .style("outline", "none")  // Remove the focus outline
+          .style("transition", "background-color 0.3s");  // Smooth transition for hover effect
 
         input.on("input", function() {
           handleFieldChange(field, this.value);
         });
 
-        // Add label
-        // svg.append("text")
-        //   .attr("x", inputX)
-        //   .attr("y", inputY - 5)
-        //   .text(config.label)
-        //   .style("font-size", "14px")
-        //   .style("font-weight", "bold")
-        //   .style("fill", "#333");
+        // Add label above the input field
+        svg.append("text")
+          .attr("x", config.x)
+          .attr("y", config.y + 8)  // Position it just above the input field
+          .text(config.label)
+          .style("font-size", "10px")
+          .style("font-weight", "bold")
+          .style("fill", config.color)
+          .style("text-anchor", "middle");
       });
-
-      // Define arrowhead marker
-      svg.append("defs").append("marker")
-        .attr("id", "arrowhead")
-        .attr("viewBox", "0 -5 10 10")
-        .attr("refX", 8)
-        .attr("refY", 0)
-        .attr("markerWidth", 6)
-        .attr("markerHeight", 6)
-        .attr("orient", "auto")
-        .append("path")
-        .attr("d", "M0,-5L10,0L0,5")
-        .attr("fill", "#999");
     }
   }, [results, currentPage, fields]);
 
