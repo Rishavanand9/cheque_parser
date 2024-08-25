@@ -1,18 +1,48 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import * as d3 from 'd3';
 import './EnhancedChequeParse.css';
+import { saveAs } from 'file-saver';
+import { utils, write } from 'xlsx';
+import { Document, Page, View, Text, pdf } from '@react-pdf/renderer';
 
+/**
+ * EnhancedChequeParse Component
+ * 
+ * This component provides a comprehensive interface for parsing cheques,
+ * visualizing the results, and allowing users to edit the extracted data.
+ */
 const EnhancedChequeParse = () => {
+  // State declarations
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
-  const [annotations, setAnnotations] = useState([]);
-  const [popupPosition, setPopupPosition] = useState(null);
-  const imageRef = useRef(null);
+  const svgRef = useRef(null);
 
-  const fieldOptions = ['amount', 'name', 'chequenumber', 'bankaccountno'];
+  // Configuration for cheque fields
+  const fieldConfig = {
+    date: { label: 'Date', x: 700, y: 50, color: '#3357FF' },
+    id: { label: 'ID', x: 50, y: 30, color: '#FF5733' },
+    bank_name: { label: 'Bank Name', x: 100, y: 60, color: '#20B2AA' },
+    ifsc_code: { label: 'IFSC Code', x: 600, y: 80, color: '#20B2AA' },
+    amount_in_words: { label: 'Amount in Words', x: 100, y: 150, color: '#FF33FF' },
+    amount_in_digits: { label: 'Amount in Digits', x: 600, y: 150, color: '#33FFFF' },
+    payer: { label: 'Payer', x: 100, y: 100, color: '#FFA500' },
+    account_number: { label: 'Account Number', x: 110, y: 220, color: '#8A2BE2' },
+    cheque_number: { label: 'Cheque Number', x: 500, y: 350, color: '#20B2AA' },
+    party_code: { label: 'Party Code', x: 500000, y: 100000, color: '#DC143C' },
+    party_name: { label: 'Party Name', x: 500000, y: 100000, color: '#4B0082' }
+  };
 
+  const [fields, setFields] = useState(
+    Object.keys(fieldConfig).reduce((acc, key) => ({ ...acc, [key]: '' }), {})
+  );
+
+  /**
+   * Handles file selection for upload
+   * @param {Event} event - The file input change event
+   */
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
     if (selectedFile && selectedFile.type === 'application/pdf') {
@@ -24,6 +54,9 @@ const EnhancedChequeParse = () => {
     }
   };
 
+  /**
+   * Handles the cheque parsing process
+   */
   const handleUpload = async () => {
     if (!file) {
       setError('Please select a file first');
@@ -50,7 +83,7 @@ const EnhancedChequeParse = () => {
       if (data.status === 'success') {
         setResults(data.data);
         setCurrentPage(0);
-        setAnnotations([]); // Clear annotations when new file is uploaded
+        setFields(data.data[0].extracted_data || fields);
       } else {
         throw new Error(data.message || 'Failed to parse cheque.');
       }
@@ -62,14 +95,32 @@ const EnhancedChequeParse = () => {
     }
   };
 
+  /**
+   * Updates the state when a field value changes
+   * @param {string} field - The field name
+   * @param {string} value - The new value
+   */
+  const handleFieldChange = (field, value) => {
+    setFields(prevFields => ({
+      ...prevFields,
+      [field]: value
+    }));
+  };
+
+  /**
+   * Saves the parsed and potentially edited data to the database
+   */
   const handleSaveToDb = async () => {
     try {
+      const updatedResults = [...results];
+      updatedResults[currentPage].extracted_data = fields;
+
       const response = await fetch('http://172.105.50.148:5050/api/save-to-db', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(results),
+        body: JSON.stringify(updatedResults),
       });
 
       if (!response.ok) {
@@ -89,110 +140,141 @@ const EnhancedChequeParse = () => {
     }
   };
 
-  const handleImageClick = (e) => {
-    if (imageRef.current) {
-      const { left, top } = imageRef.current.getBoundingClientRect();
-      const x = e.clientX - left;
-      const y = e.clientY - top;
-      setPopupPosition({ x, y });
+  /**
+   * Renders the D3 visualization of the cheque
+   */
+  useEffect(() => {
+    if (results.length > 0 && results[currentPage].image_data) {
+      const svg = d3.select(svgRef.current);
+      svg.selectAll("*").remove(); // Clear previous content
+
+      const width = 1000;
+      const height = 600;
+
+      svg
+        .attr("width", width)
+        .attr("height", height)
+        .style("border", "1px solid #ccc");
+
+      // Create an image element
+      svg.append("image")
+        .attr("xlink:href", `data:image/jpeg;base64,${results[currentPage].image_data}`)
+        .attr("width", 800)
+        .attr("height", 400);
+
+      // Add dots, arrows, and input fields for each field
+      Object.entries(fieldConfig).forEach(([field, config], index) => {
+        // Add dot on the cheque
+        svg.append("circle")
+          .attr("cx", config.x)
+          .attr("cy", config.y)
+          .attr("r", 5)
+          .attr("fill", config.color);
+
+        // Calculate input position
+        const inputX = 820;
+        const inputY = 50 + index * 40;
+
+        // Add arrow
+        svg.append("path")
+          .attr("d", `M${config.x},${config.y} C${(config.x + inputX) / 2},${config.y} ${(config.x + inputX) / 2},${inputY} ${inputX - 10},${inputY + 15}`)
+          .attr("stroke", config.color)
+          .attr("fill", "none")
+          .attr("stroke-width", 2)
+          .attr("marker-end", "url(#arrowhead)");
+
+        // Add input field
+        const foreignObject = svg.append("foreignObject")
+          .attr("x", inputX)
+          .attr("y", inputY)
+          .attr("width", 160)
+          .attr("height", 30);
+
+        const input = foreignObject.append("xhtml:input")
+          .attr("type", "text")
+          .attr("value", fields[field] || '')
+          .attr("placeholder", config.label)
+          .style("width", "100%")
+          .style("height", "100%")
+          .style("font-size", "14px")
+          .style("padding", "5px")
+          .style("border", `2px solid ${config.color}`)
+          .style("border-radius", "5px")
+          .style("color", "#333");
+
+        input.on("input", function() {
+          handleFieldChange(field, this.value);
+        });
+
+        // Add label
+        // svg.append("text")
+        //   .attr("x", inputX)
+        //   .attr("y", inputY - 5)
+        //   .text(config.label)
+        //   .style("font-size", "14px")
+        //   .style("font-weight", "bold")
+        //   .style("fill", "#333");
+      });
+
+      // Define arrowhead marker
+      svg.append("defs").append("marker")
+        .attr("id", "arrowhead")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 8)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "#999");
     }
+  }, [results, currentPage, fields]);
+
+  useEffect(() => {
+    if (results.length > 0) {
+      setFields(results[currentPage].extracted_data || {});
+    }
+  }, [currentPage, results]);
+
+  const exportToCSV = () => {
+    const ws = utils.json_to_sheet(results.map(r => r.extracted_data));
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, "Cheque Data");
+    const wbout = write(wb, { bookType: 'csv', type: 'binary' });
+    saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), "cheque_data.csv");
   };
 
-  const handleAnnotationSubmit = (field, value) => {
-    if (field && value && popupPosition) {
-      const newAnnotation = { ...popupPosition, field, value };
-      setAnnotations([...annotations, newAnnotation]);
-      
-      // Update the results state
-      const updatedResults = [...results];
-      updatedResults[currentPage].extracted_data[field] = value;
-      setResults(updatedResults);
-
-      // Close the popup
-      setPopupPosition(null);
-    }
-  };
-
-  const renderContent = () => {
-    if (results.length === 0) {
-      return <p className="no-data">No data to display. Please parse a cheque first.</p>;
-    }
-
-    const currentData = results[currentPage];
-
-    return (
-      <div className="content-wrapper">
-        <div className="card data-section">
-          <h3>Extracted Data</h3>
-          <pre className="json-data">{JSON.stringify(currentData.extracted_data, null, 2)}</pre>
-          <h3>Full Text</h3>
-          <p className="full-text">{currentData.full_text}</p>
-        </div>
-        <div className="card image-section">
-          <div className="relative">
-            <img
-              ref={imageRef}
-              src={`data:image/jpeg;base64,${currentData.image_data}`}
-              alt={`Cheque ${currentPage + 1}`}
-              className="cheque-image"
-              onClick={handleImageClick}
-            />
-            <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
-              {annotations.map((anno, index) => (
-                <g key={index}>
-                  <line
-                    x1={anno.x}
-                    y1={anno.y}
-                    x2={anno.x}
-                    y2={anno.y + 30}
-                    stroke="red"
-                    strokeWidth="2"
-                  />
-                  <text
-                    x={anno.x}
-                    y={anno.y + 45}
-                    fill="red"
-                    fontSize="12"
-                    textAnchor="middle"
-                  >
-                    {anno.field}: {anno.value}
-                  </text>
-                </g>
-              ))}
-            </svg>
-            {popupPosition && (
-              <div 
-                className="annotation-popup"
-                style={{ 
-                  position: 'absolute', 
-                  left: popupPosition.x, 
-                  top: popupPosition.y 
-                }}
-              >
-                <select onChange={(e) => handleAnnotationSubmit(e.target.value, document.getElementById('annotation-value').value)}>
-                  <option value="">Select Field</option>
-                  {fieldOptions.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-                <input 
-                  id="annotation-value"
-                  type="text"
-                  placeholder="Enter value"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleAnnotationSubmit(document.querySelector('.annotation-popup select').value, e.target.value);
-                    }
-                  }}
-                />
-                <button onClick={() => setPopupPosition(null)}>Cancel</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+  const exportToPDF = async () => {
+    const MyDocument = () => (
+      <Document>
+        <Page size="A4">
+          <View>
+            <Text>Cheque Data</Text>
+            {results.map((result, index) => (
+              <View key={index}>
+                <Text>Page {index + 1}</Text>
+                {Object.entries(result.extracted_data).map(([key, value]) => (
+                  <Text key={key}>{key}: {value}</Text>
+                ))}
+              </View>
+            ))}
+          </View>
+        </Page>
+      </Document>
     );
+
+    const blob = await pdf(<MyDocument />).toBlob();
+    saveAs(blob, "cheque_data.pdf");
   };
+
+  function s2ab(s) {
+    const buf = new ArrayBuffer(s.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i != s.length; ++i) view[i] = s.charCodeAt(i) & 0xFF;
+    return buf;
+  }
+
 
   return (
     <div className="dashboard">
@@ -216,32 +298,60 @@ const EnhancedChequeParse = () => {
             {uploading ? 'Parsing...' : 'Parse Cheque'}
           </button>
           {results.length > 0 && (
+            <>
             <button onClick={handleSaveToDb} className="button">Save to Database</button>
+            <button onClick={exportToCSV} className="button">Export to CSV</button>
+            <button onClick={exportToPDF} className="button">Export to PDF</button>
+            </>
           )}
           {error && <div className="error-message">{error}</div>}
           {uploading && <div className="loading-spinner"></div>}
         </aside>
         <section className="main-section">
           <h2>Parsed Cheque Data</h2>
-          {renderContent()}
-          {results.length > 1 && (
-            <div className="pagination">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-                disabled={currentPage === 0}
-                className="button"
-              >
-                Previous
-              </button>
-              <span>Page {currentPage + 1} of {results.length}</span>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(results.length - 1, prev + 1))}
-                disabled={currentPage === results.length - 1}
-                className="button"
-              >
-                Next
-              </button>
-            </div>
+          {results.length > 0 ? (
+            <>
+              <div className="content-wrapper">
+                <div className="card form-section">
+                  <h3>Extracted Data</h3>
+                  {Object.entries(fieldConfig).map(([field, config]) => (
+                    <div key={field} className="input-group">
+                      <label htmlFor={field}>{config.label}</label>
+                      <input
+                        id={field}
+                        type="text"
+                        value={fields[field] || ''}
+                        onChange={(e) => handleFieldChange(field, e.target.value)}
+                        className="input-field"
+                        style={{ borderColor: config.color }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="card image-section">
+                  <svg ref={svgRef}></svg>
+                </div>
+              </div>
+              <div className="pagination">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                  disabled={currentPage === 0}
+                  className="button"
+                >
+                  Previous
+                </button>
+                <span>Page {currentPage + 1} of {results.length}</span>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(results.length - 1, prev + 1))}
+                  disabled={currentPage === results.length - 1}
+                  className="button"
+                >
+                  Next
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="no-data">No data to display. Please parse a cheque first.</p>
           )}
         </section>
       </main>
