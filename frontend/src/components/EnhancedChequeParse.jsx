@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 import './EnhancedChequeParse.css';
 import { saveAs } from 'file-saver';
@@ -18,10 +18,10 @@ const EnhancedChequeParse = () => {
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
-  const svgRef = useRef(null);
-
   // Configuration for cheque fields
   const fieldConfig = {
+    party_code: { label: 'Party Code',  x: 850, y: 380, color: '#DC143C' },
+    party_name: { label: 'Party Name',  x: 850, y: 430, color: '#4B0082' },
     date: { label: 'Date', x: 900, y: 30, color: '#3357FF' },
     // id: { label: 'ID', x: 50, y: 30, color: '#FF5733' },
     bank_name: { label: 'Bank Name', x: 100, y: 10, color: '#20B2AA' },
@@ -31,13 +31,103 @@ const EnhancedChequeParse = () => {
     payer: { label: 'Payer', x: 400, y: 70, color: '#FFA500' },
     account_number: { label: 'Account Number', x: 300, y: 220, color: '#8A2BE2' },
     cheque_number: { label: 'Cheque Number', x: 600, y: 400, color: '#20B2AA' },
-    party_code: { label: 'Party Code',  x: 850, y: 380, color: '#DC143C' },
-    party_name: { label: 'Party Name',  x: 850, y: 430, color: '#4B0082' }
   };
 
   const [fields, setFields] = useState(
     Object.keys(fieldConfig).reduce((acc, key) => ({ ...acc, [key]: '' }), {})
   );
+
+  const svgRef = useRef(null);
+  const inputRefs = useRef({});
+
+  const handleFieldChange = useCallback((field, value) => {
+    setFields(prevFields => ({
+      ...prevFields,
+      [field]: value
+    }));
+    // eslint-disable-next-line
+  }, []);
+
+  useEffect(() => {
+    if (results.length > 0 && results[currentPage].image_data) {
+      const svg = d3.select(svgRef.current);
+      svg.selectAll("*").remove();
+
+      const width = 1000;
+      const height = 500;
+
+      svg
+        .attr("width", width)
+        .attr("height", height)
+        .style("border", "1px solid #ccc");
+
+      // Create an image element
+      svg.append("image")
+        .attr("xlink:href", `data:image/jpeg;base64,${results[currentPage].image_data}`)
+        .attr("width", width)
+        .attr("height", 400);
+
+      // Add dots, labels, and input fields for each field
+      Object.entries(fieldConfig).forEach(([field, config]) => {
+        // Add dot on the cheque
+        svg.append("circle")
+          .attr("cx", config.x)
+          .attr("cy", config.y)
+          .attr("r", 5)
+          .attr("fill", config.color);
+
+        // Add label
+        svg.append("text")
+          .attr("x", config.x)
+          .attr("y", config.y + 8)
+          .text(config.label)
+          .style("font-size", "10px")
+          .style("font-weight", "bold")
+          .style("fill", config.color)
+          .style("text-anchor", "middle");
+
+        // Add input field
+        const foreignObject = svg.append("foreignObject")
+          .attr("x", config.x - 75)
+          .attr("y", config.y + 10)
+          .attr("width", 150)
+          .attr("height", 30);
+
+        const input = foreignObject.append("xhtml:input")
+          .attr("type", "text")
+          .attr("value", fields[field] || '')
+          .style("width", "100%")
+          .style("height", "100%")
+          .style("font-size", "12px")
+          .style("padding", "5px")
+          .style("border", "none")
+          .style("border-radius", "3px")
+          .style("color", "white")
+          .style("background-color", "rgba(0, 0, 0, 0.8)")
+          .style("outline", "none")
+          .style("transition", "background-color 0.3s");
+
+        input.on("input", function() {
+          handleFieldChange(field, this.value);
+        });
+
+        // Store reference to the input element
+        inputRefs.current[field] = input.node();
+      });
+    }
+    // eslint-disable-next-line
+  }, [results, currentPage, fieldConfig, handleFieldChange]);
+
+  // Update input values when fields change
+  useEffect(() => {
+    Object.entries(fields).forEach(([field, value]) => {
+      if (inputRefs.current[field]) {
+        inputRefs.current[field].value = value;
+      }
+    });
+    // eslint-disable-next-line
+  }, [fields]);
+
 
   /**
    * Handles file selection for upload
@@ -95,17 +185,6 @@ const EnhancedChequeParse = () => {
     }
   };
 
-  /**
-   * Updates the state when a field value changes
-   * @param {string} field - The field name
-   * @param {string} value - The new value
-   */
-  const handleFieldChange = (field, value) => {
-    setFields(prevFields => ({
-      ...prevFields,
-      [field]: value
-    }));
-  };
 
   /**
    * Saves the parsed and potentially edited data to the database
@@ -143,72 +222,7 @@ const EnhancedChequeParse = () => {
   /**
    * Renders the D3 visualization of the cheque
    */
-  useEffect(() => {
-    if (results.length > 0 && results[currentPage].image_data) {
-      const svg = d3.select(svgRef.current);
-      svg.selectAll("*").remove(); // Clear previous content
 
-      const width = 1000;
-      const height = 500;
-
-      svg
-        .attr("width", width)
-        .attr("height", height)
-        .style("border", "1px solid #ccc");
-
-      // Create an image element
-      svg.append("image")
-        .attr("xlink:href", `data:image/jpeg;base64,${results[currentPage].image_data}`)
-        .attr("width", width)
-        .attr("height", 400);
-
-      // Add dots and input fields for each field
-      Object.entries(fieldConfig).forEach(([field, config]) => {
-        // Add dot on the cheque
-        svg.append("circle")
-          .attr("cx", config.x)
-          .attr("cy", config.y)
-          .attr("r", 5)
-          .attr("fill", config.color);
-
-        // Add input field below the dot
-        const foreignObject = svg.append("foreignObject")
-          .attr("x", config.x - 75)  // Center the input field below the dot
-          .attr("y", config.y + 10)  // Position it just below the dot
-          .attr("width", 200)
-          .attr("height", 45);
-
-          const input = foreignObject.append("xhtml:input")
-          .attr("type", "text")
-          .attr("value", fields[field] || '')
-          .attr("placeholder", config.label)
-          .style("width", "100%")
-          .style("height", "100%")
-          .style("font-size", "12px")
-          .style("padding", "5px")
-          .style("border", "none")
-          .style("border-radius", "3px")
-          .style("color", "white")
-          .style("background-color", "rgba(0, 0, 0, 0.8)")  // Semi-transparent black background
-          .style("outline", "none")  // Remove the focus outline
-          .style("transition", "background-color 0.3s");  // Smooth transition for hover effect
-
-        input.on("input", function() {
-          handleFieldChange(field, this.value);
-        });
-
-        // Add label above the input field
-        svg.append("text")
-          .attr("x", config.x)
-          .attr("y", config.y + 8)  // Position it just above the input field
-          .text(config.label)
-          .style("font-size", "10px")
-          .style("font-weight", "bold")
-          .style("fill", config.color)
-          .style("text-anchor", "middle");
-      });
-    }
-  }, [results, currentPage, fields]);
 
   useEffect(() => {
     if (results.length > 0) {
@@ -250,7 +264,7 @@ const EnhancedChequeParse = () => {
   function s2ab(s) {
     const buf = new ArrayBuffer(s.length);
     const view = new Uint8Array(buf);
-    for (let i = 0; i != s.length; ++i) view[i] = s.charCodeAt(i) & 0xFF;
+    for (let i = 0; i !== s.length; ++i) view[i] = s.charCodeAt(i) & 0xFF;
     return buf;
   }
 
@@ -299,6 +313,7 @@ const EnhancedChequeParse = () => {
                       <input
                         id={field}
                         type="text"
+                        disabled
                         value={fields[field] || ''}
                         onChange={(e) => handleFieldChange(field, e.target.value)}
                         className="input-field"

@@ -3,16 +3,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
-import tempfile
-from pdf2image import convert_from_path
 import logging
 import time
-from google.cloud import documentai_v1 as documentai
-from google.oauth2 import service_account
-import concurrent.futures
+from google.cloud import documentai
+from google.api_core.client_options import ClientOptions
 import io
 import re
-
+from pdf2image import convert_from_bytes
 
 # Import the database functions
 from database_utils import insert_parsed_cheque, get_all_parsed_cheques
@@ -20,142 +17,134 @@ from database_utils import insert_parsed_cheque, get_all_parsed_cheques
 app = Flask(__name__)
 CORS(app)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for more detailed logs
 logger = logging.getLogger(__name__)
 
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def get_text_from_google_api(image_data):
-    logger.info("Document AI is processing the image")
-    
-    credentials = service_account.Credentials.from_service_account_file('/root/google_service_account.json')
-    client = documentai.DocumentProcessorServiceClient(credentials=credentials)
-    name = client.processor_path('document-project-422815', 'us', 'f1b5ccccf850a629')
+def extract_text_from_page(page):
+    """
+    Attempt to extract text from a page object, handling different possible structures.
+    """
+    if hasattr(page, 'text'):
+        return page.text
+    elif hasattr(page, 'text_anchor') and hasattr(page.text_anchor, 'content'):
+        return page.text_anchor.content
+    elif hasattr(page, 'paragraphs'):
+        return ' '.join([p.text for p in page.paragraphs if hasattr(p, 'text')])
+    else:
+        # Log the available attributes of the page object
+        logger.debug(f"Available page attributes: {dir(page)}")
+        return ""
 
-    document = {"content": image_data, "mime_type": "image/jpeg"}
-    
-    # Simplified request
+def process_document_with_documentai(project_id: str, location: str, processor_id: str, file_content: bytes, mime_type: str):
+    opts = ClientOptions(api_endpoint=f"{location}-documentai.googleapis.com")
+    client = documentai.DocumentProcessorServiceClient(client_options=opts)
+
+    name = client.processor_path(project_id, location, processor_id)
+
+    raw_document = documentai.RawDocument(content=file_content, mime_type=mime_type)
+
     request = documentai.ProcessRequest(
         name=name,
-        raw_document=document,
-        field_mask="text,entities"
+        raw_document=raw_document
     )
-    
+
     result = client.process_document(request=request)
+    document = result.document
 
-    extracted_data = {
-        "bank_name": "",
-        "date": "",
-        "ifsc_code": "",
-        "amount_in_words": "",
-        "amount_in_digits": "",
-        "payer": "",
-        "account_number": "",
-        "cheque_number": "",
-    }
+    # Log available fields for debugging
+    logger.debug(f"Document fields: {dir(document)}")
+    if document.pages:
+        logger.debug(f"Page fields: {dir(document.pages[0])}")
 
-    # Process entities
-    for entity in result.document.entities:
-        if entity.type_ in extracted_data:
-            extracted_data[entity.type_] = entity.mention_text
+    # Process entities at the document level
+    entity_dict = {}
+    if hasattr(document, 'entities'):
+        for entity in document.entities:
+            entity_dict[entity.type_.lower()] = entity.mention_text
 
-    # If entities didn't provide all information, try to extract from full text
-    full_text = result.document.text
-    lines = full_text.split('\n')
-    
-    if not all(extracted_data.values()):
-        # Bank name (usually at the top of the cheque)
+    pages_data = []
+
+    import pdb;pdb.set_trace();
+    for page in document.pages:
+        extracted_data = {
+            "bank_name": entity_dict.get("bank_name", ""),
+            "date": entity_dict.get("date", ""),
+            "ifsc_code": entity_dict.get("ifsc_code", ""),
+            "amount_in_words": entity_dict.get("amount_in_words", ""),
+            "amount_in_digits": entity_dict.get("amount", ""),
+            "payer": entity_dict.get("payer", "") or entity_dict.get("payee", ""),
+            "account_number": entity_dict.get("account_number", ""),
+            "cheque_number": entity_dict.get("cheque_number", ""),
+        }
+
+        # Extract page text
+        page_text = extract_text_from_page(page)
+
+        # Extract information from page text using regex if not found in entities
         if not extracted_data["bank_name"]:
-            bank_lines = [line.strip() for line in lines if "BANK" in line.upper()]
-            if bank_lines:
-                extracted_data["bank_name"] = bank_lines[0]
-            else:
-                extracted_data["bank_name"] = lines[0].strip() if lines else ""
+            bank_match = re.search(r'(?i)([\w\s]+)\s+bank', page_text)
+            if bank_match:
+                extracted_data["bank_name"] = bank_match.group(1).strip()
 
-        # Date
         if not extracted_data["date"]:
-            date_match = re.search(r'\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b', full_text)
+            date_match = re.search(r'\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b', page_text)
             if date_match:
-                day, month, year = date_match.groups()
-                extracted_data["date"] = f"{day.zfill(2)}/{month.zfill(2)}/{year.zfill(4)}"
+                extracted_data["date"] = date_match.group(1)
 
-        # IFSC code
         if not extracted_data["ifsc_code"]:
-            ifsc_match = re.search(r'IFSC\s*:?\s*([A-Z]{4}[0-9]{7})', full_text, re.IGNORECASE)
+            ifsc_match = re.search(r'IFSC\s*:?\s*([A-Z]{4}[0-9]{7})', page_text, re.IGNORECASE)
             if ifsc_match:
                 extracted_data["ifsc_code"] = ifsc_match.group(1)
 
-        # Amount in words
         if not extracted_data["amount_in_words"]:
-            amount_words_match = re.search(r'(?:Rupees|Rs\.?)\s+(.*?)\s+(?:only|ONLY)', full_text, re.IGNORECASE)
+            amount_words_match = re.search(r'(?i)(?:rupees|rs\.?)\s+(.*?)\s+(?:only|ONLY)', page_text)
             if amount_words_match:
                 extracted_data["amount_in_words"] = amount_words_match.group(1).strip()
 
-        # Amount in digits
         if not extracted_data["amount_in_digits"]:
-            amount_digits_match = re.search(r'₹?\s*(\d+(:?\,\d+)*(:?\.\d{2})?)', full_text)
+            amount_digits_match = re.search(r'₹?\s*(\d+(?:,\d+)*(?:\.\d{2})?)', page_text)
             if amount_digits_match:
                 extracted_data["amount_in_digits"] = amount_digits_match.group(1).replace(',', '')
 
-        # Payer name
         if not extracted_data["payer"]:
-            pay_match = re.search(r'Pay\s+(.*?)\s+(?:or\s+bearer|OR\s+BEARER)', full_text, re.IGNORECASE)
-            if pay_match:
-                extracted_data["payer"] = pay_match.group(1).strip()
+            payer_match = re.search(r'(?i)pay\s+(.*?)\s+(?:or\s+bearer|OR\s+BEARER)', page_text)
+            if payer_match:
+                extracted_data["payer"] = payer_match.group(1).strip()
 
-        # Account number (updated to check for numbers >= 12 digits)
         if not extracted_data["account_number"]:
-            account_matches = re.findall(r'\b\d{12,}\b', full_text)
+            account_matches = re.findall(r'\b\d{9,18}\b', page_text)
             if account_matches:
                 extracted_data["account_number"] = max(account_matches, key=len)
 
-        # Cheque number
         if not extracted_data["cheque_number"]:
-            cheque_pattern = r'[⑈⑆](\d{6})[⑈⑆]\s*(\d{9})[⑈⑆]\s*(\d{6})[⑈⑆]\s*(\d{2})'
-            cheque_match = re.search(cheque_pattern, full_text)
-            if cheque_match:
-                extracted_data["cheque_number"] = ''.join(cheque_match.groups())
-            else:
-                # Fallback: look for any sequence of 6 digits that might represent the cheque number
-                digit_sequences = re.findall(r'\b\d{6}\b', full_text)
-                if digit_sequences:
-                    extracted_data["cheque_number"] = digit_sequences[0]  # Use the first 6-digit sequence
+            cheque_matches = re.findall(r'\b\d{6}\b', page_text)
+            if cheque_matches:
+                extracted_data["cheque_number"] = cheque_matches[0]
 
-    # Clean up extracted data
-    for key, value in extracted_data.items():
-        extracted_data[key] = value.strip() if isinstance(value, str) else value
-
-    return extracted_data, '\n'.join(lines)  # Return extracted data and full text separated by new lines
-def process_image_with_timeout(image_path, timeout=30):
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(process_image, image_path)
-        try:
-            return future.result(timeout=timeout)
-        except concurrent.futures.TimeoutError:
-            logger.warning(f"Document AI processing timed out for {image_path}")
-            return None
-
-def process_image(image_path):
-    try:
-        with open(image_path, "rb") as image_file:
-            image_data = image_file.read()
-        
-        extracted_data, full_text = get_text_from_google_api(image_data)
-        
-        # Encode image to base64 for frontend display
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
-        
-        return {
+        pages_data.append({
+            "page_number": page.page_number if hasattr(page, 'page_number') else 0,
             "extracted_data": extracted_data,
-            "full_text": full_text,
-            "image_data": image_base64,
-            "processing_status": "success"
-        }
-    except Exception as e:
-        logger.error(f"Error processing image: {str(e)}")
-        return {"error": str(e), "processing_status": "error"}
+            "full_text": page_text
+        })
+
+    return pages_data
+
+def extract_images_from_pdf(pdf_content):
+    images = convert_from_bytes(pdf_content)
+    image_data = []
+    for i, image in enumerate(images):
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        img_byte_arr = img_byte_arr.getvalue()
+        image_data.append({
+            "page_number": i + 1,
+            "image_data": base64.b64encode(img_byte_arr).decode('utf-8')
+        })
+    return image_data
 
 @app.route('/api/parse-cheque', methods=['POST'])
 def upload_file():
@@ -170,40 +159,30 @@ def upload_file():
             return jsonify({"status": "error", "message": "No selected file"}), 400
         
         if file and file.filename.lower().endswith('.pdf'):
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-            logger.info(f"Saved uploaded file: {file_path}")
+            file_content = file.read()
             
             try:
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    images = convert_from_path(file_path)
-                    logger.info(f"Converted PDF to {len(images)} images")
-                    
-                    results = []
-                    for i, image in enumerate(images):
-                        image_path = os.path.join(temp_dir, f'cheque_{i}.jpg')
-                        image.save(image_path, 'JPEG')
-                        
-                        result = process_image_with_timeout(image_path)
-                        if result:
-                            results.append(result)
-                        else:
-                            # If processing failed, include a thumbnail of the image
-                            image.thumbnail((100, 100))
-                            buffered = io.BytesIO()
-                            image.save(buffered, format="JPEG")
-                            img_data = base64.b64encode(buffered.getvalue()).decode('utf-8')
-                            results.append({
-                                "image_data": img_data,
-                                "processing_status": "error",
-                                "error": "Processing timed out or failed"
-                            })
-                    
-                    logger.info(f"Processed {len(results)} cheque images")
-
-                os.remove(file_path)
-                return jsonify({"status": "success", "data": results})
+                project_id = "763261229345"
+                location = "us"
+                processor_id = "f2cc8892ef0a7408"
+                
+                pages_data = process_document_with_documentai(
+                    project_id, location, processor_id, file_content, "application/pdf"
+                )
+                
+                # Extract images from all pages
+                image_data = extract_images_from_pdf(file_content)
+                
+                # Combine page data with image data
+                result = []
+                for page in pages_data:
+                    page_image = next((img for img in image_data if img["page_number"] == page["page_number"]), None)
+                    if page_image:
+                        page["image_data"] = page_image["image_data"]
+                    result.append(page)
+                
+                logger.info("Processed PDF successfully")
+                return jsonify({"status": "success", "data": result})
             except Exception as e:
                 logger.error(f"Error processing PDF: {str(e)}")
                 return jsonify({"status": "error", "message": f"Error processing PDF: {str(e)}"}), 500
