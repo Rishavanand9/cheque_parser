@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set the path to your project directory
-PROJECT_DIR="/path/to/your/project"
+PROJECT_DIR="/root/cheque_parser"
 
 # Function to start the application
 start_app() {
