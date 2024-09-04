@@ -66,7 +66,10 @@ def upload_file():
                     gemini_response = get_text_from_gemini_api(page["image_data"])
                     
                     try:
-                        parsed_data = gemini_response
+                        json_string = gemini_response.replace("```json", "").replace("```", "").strip()
+                        # Parse the JSON string
+                        parsed_data = json.loads(json_string)
+                        
                     except json.JSONDecodeError:
                         logger.error(f"Failed to parse Gemini API response as JSON: {gemini_response}")
                         parsed_data = {"error": "Failed to parse response"}

@@ -90,21 +90,19 @@ const EnhancedChequeParse = () => {
         const foreignObject = svg.append("foreignObject")
           .attr("x", config.x - 75)
           .attr("y", config.y + 10)
-          .attr("width", 150)
-          .attr("height", 30);
+          .attr("width", 230)
+          .attr("height", 40);
 
         const input = foreignObject.append("xhtml:input")
           .attr("type", "text")
-          .attr("value", fields[field] || '')
+          .attr("value", fields[field]['value'] || '')
           .style("width", "100%")
           .style("height", "100%")
           .style("font-size", "12px")
-          .style("padding", "5px")
-          .style("border", "none")
-          .style("border-radius", "3px")
-          .style("color", "white")
-          .style("background-color", "rgba(0, 0, 0, 0.8)")
-          .style("outline", "none")
+          .style("padding", "2px 8px")
+          .style("color", 'white')
+          .style("background-color", "rgba(0, 0, 0, 0.7)")
+          .style("border", `2px solid ${config.color}`)
           .style("transition", "background-color 0.3s");
 
         input.on("input", function() {
@@ -122,7 +120,7 @@ const EnhancedChequeParse = () => {
   useEffect(() => {
     Object.entries(fields).forEach(([field, value]) => {
       if (inputRefs.current[field]) {
-        inputRefs.current[field].value = value;
+        inputRefs.current[field].value = fields?.[field]?.value;
       }
     });
     // eslint-disable-next-line
@@ -307,20 +305,23 @@ const EnhancedChequeParse = () => {
               <div className="content-wrapper">
                 <div className="card form-section">
                   <h3>Extracted Data</h3>
-                  {Object.entries(fieldConfig).map(([field, config]) => (
+                  {Object.entries(fieldConfig).map(([field, config]) => {
+                    console.log('field', field, fields)
+                    return(
                     <div key={field} className="input-group">
                       <label htmlFor={field}>{config.label}</label>
                       <input
                         id={field}
                         type="text"
                         disabled
-                        value={fields[field] || ''}
+                        value={fields[field]['value'] || ''}
                         onChange={(e) => handleFieldChange(field, e.target.value)}
                         className="input-field"
                         style={{ borderColor: config.color }}
                       />
                     </div>
-                  ))}
+                  )}
+                  )}
                 </div>
                 <div className="card image-section">
                   <svg ref={svgRef}></svg>
