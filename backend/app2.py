@@ -5,21 +5,31 @@ from werkzeug.utils import secure_filename
 import os
 import logging
 import time
-from google.cloud import documentai
-from google.api_core.client_options import ClientOptions
+# from google.cloud import documentai
+# from google.api_core.client_options import ClientOptions
 import io
 import re
 from pdf2image import convert_from_bytes
-import json
+
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel, pipeline
+import torch
+from PIL import Image
+import pytesseract
+from fuzzywuzzy import fuzz
+import numpy as np
+from prompt import EXTRACTION_PROMPT
 
 # Import the database functions
 from database_utils import insert_parsed_cheque, get_all_parsed_cheques
 
-# Import the Gemini API function
-from gemini import get_text_from_gemini_api
-
 app = Flask(__name__)
 CORS(app)
+
+
+# Load Hugging Face model
+processor = TrOCRProcessor.from_pretrained("microsoft/trocr-large-printed")
+model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-large-printed")
+nlp = pipeline("text2text-generation", model="google/flan-t5-base")
 
 logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for more detailed logs
 logger = logging.getLogger(__name__)
@@ -27,6 +37,50 @@ logger = logging.getLogger(__name__)
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def extract_text_with_trocr(image):
+    pixel_values = processor(images=image, return_tensors="pt").pixel_values
+    generated_ids = model.generate(pixel_values)
+    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    return generated_text
+
+def extract_text_with_tesseract(image):
+    return pytesseract.image_to_string(image)
+
+def prompt_guided_extraction(combined_text):
+    prompt = EXTRACTION_PROMPT.format(extracted_text=combined_text)
+    response = nlp(prompt, max_length=1000, num_return_sequences=1)[0]['generated_text']
+    
+    # Parse the response
+    fields = ["Bank Name", "IFSC Code", "Cheque Amount", "Date", "Account Number", "Cheque Number"]
+    extracted_data = {}
+    
+    for field in fields:
+        # Use raw string for the regular expression
+        match = re.search(r"{}: (.*?) \(Confidence: (\d+)%\)".format(re.escape(field)), response)
+        if match:
+            value, confidence = match.groups()
+            extracted_data[field.lower().replace(" ", "_")] = {
+                "value": value.strip(),
+                "confidence": float(confidence) / 100,
+                "needs_review": float(confidence) < 70 or value.strip() in ["Not Available", "Requires Manual Verification"]
+            }
+        else:
+            extracted_data[field.lower().replace(" ", "_")] = {
+                "value": "Not Available",
+                "confidence": 0,
+                "needs_review": True
+            }
+    
+    return extracted_data
+
+def process_image(image):
+    trocr_text = extract_text_with_trocr(image)
+    tesseract_text = extract_text_with_tesseract(image)
+    
+    combined_text = f"TrOCR output:\n{trocr_text}\n\nTesseract output:\n{tesseract_text}"
+    
+    return prompt_guided_extraction(combined_text)
 
 def extract_images_from_pdf(pdf_content):
     images = convert_from_bytes(pdf_content)
@@ -37,7 +91,8 @@ def extract_images_from_pdf(pdf_content):
         img_byte_arr = img_byte_arr.getvalue()
         image_data.append({
             "page_number": i + 1,
-            "image_data": img_byte_arr
+            "image_data": base64.b64encode(img_byte_arr).decode('utf-8'),
+            "pil_image": image
         })
     return image_data
 
@@ -57,24 +112,17 @@ def upload_file():
             file_content = file.read()
             
             try:
-                # Extract images from all pages
+                # Extract images from PDF
                 image_data = extract_images_from_pdf(file_content)
                 
-                # Process each image with Gemini API
+                # Process each image
                 result = []
                 for page in image_data:
-                    gemini_response = get_text_from_gemini_api(page["image_data"])
-                    
-                    try:
-                        parsed_data = gemini_response
-                    except json.JSONDecodeError:
-                        logger.error(f"Failed to parse Gemini API response as JSON: {gemini_response}")
-                        parsed_data = {"error": "Failed to parse response"}
-                    
+                    extracted_data = process_image(page['pil_image'])
                     result.append({
                         "page_number": page["page_number"],
-                        "extracted_data": parsed_data,
-                        "image_data": base64.b64encode(page["image_data"]).decode('utf-8')
+                        "image_data": page["image_data"],
+                        "extracted_data": extracted_data
                     })
                 
                 logger.info("Processed PDF successfully")
@@ -93,21 +141,10 @@ def save_to_db():
     try:
         data = request.json
         for item in data:
-            # Assuming the extracted_data is now a dictionary with 'value' and 'confidence' for each field
-            processed_data = {key: value['value'] for key, value in item['extracted_data'].items()}
-            insert_parsed_cheque(processed_data)
+            insert_parsed_cheque(item['extracted_data'])
         return jsonify({"status": "success", "message": "Data saved to database"})
     except Exception as e:
         logger.error(f"Error saving to database: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/get-all-cheques', methods=['GET'])
-def get_all_cheques():
-    try:
-        cheques = get_all_parsed_cheques()
-        return jsonify({"status": "success", "data": cheques})
-    except Exception as e:
-        logger.error(f"Error retrieving cheques from database: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
