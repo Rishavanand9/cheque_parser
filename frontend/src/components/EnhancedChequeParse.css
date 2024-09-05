@@ -320,3 +320,37 @@ text {
   font-weight: normal;
 }
 
+
+
+.all-cheques-section {
+  margin-top: 2rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.cheques-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cheques-table th,
+.cheques-table td {
+  border: 1px solid #ccc;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.cheques-table th {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
+.cheques-table tr:nth-child(even) {
+  background-color: #f8f8f8;
+}

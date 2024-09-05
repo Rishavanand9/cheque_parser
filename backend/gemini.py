@@ -18,13 +18,13 @@ Analyze the provided cheque image using multiple OCR techniques. Extract the fol
 
 {
   "party_code": "A code representing the party involved in the transaction",
-  "party_name": "The name of the party involved in the transaction",
+  "party_name": "The name or entity making the payment generaly listed below Amount Field",
   "date": "The date on which the cheque was issued, formatted as DDMMYYYY (e.g., 01012024 for January 1st, 2024)",
   "bank_name": "The name of the bank printed on the cheque",
   "ifsc_code": "The 11-character IFSC code of the bank branch",
   "amount_in_words": "The cheque amount written in words",
-  "amount_in_digits": "The cheque amount written in digits, formatted with leading zeros to ensure a consistent 6-digit length",
-  "payer": "The name or entity making the payment",
+  "amount_in_digits": "The cheque amount written in digits, usually ends with a /-",
+  "reciever": "The name of the party involved in the transaction",
   "account_number": "The account number from which the funds will be drawn",
   "cheque_number": "The unique 24 digit cheque number, typically found at the bottom of the cheque"
 

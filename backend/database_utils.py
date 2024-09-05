@@ -1,6 +1,8 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import logging
+import hashlib
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +27,23 @@ def insert_parsed_cheque(parsed_data):
         connection = get_database_connection()
         cursor = connection.cursor()
 
+        # Check if the account number already exists
+        check_account_query = "SELECT party_code FROM parsed_cheques_table WHERE account_number = %s"
+        cursor.execute(check_account_query, (parsed_data.get('account_number', ''),))
+        existing_party_code = cursor.fetchone()
+
+        if existing_party_code:
+            logger.info(f"Account number exists, returning existing party_code: {existing_party_code[0]}")
+            return existing_party_code[0]  # Return the existing party_code
+
+        # Generate a unique party_code if account number doesn't exist
+        new_party_code = str(uuid.uuid4())
+
         insert_query = """
         INSERT INTO parsed_cheques_table 
         (bank_name, date, ifsc_code, amount_in_words, amount_in_digits, 
-        payer, account_number, cheque_number, image_path, created_at) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        party_name, account_number, cheque_number, image_path, receiver, party_code, created_at) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """
         
         record_to_insert = (
@@ -38,15 +52,19 @@ def insert_parsed_cheque(parsed_data):
             parsed_data.get('ifsc_code', ''),
             parsed_data.get('amount_in_words', ''),
             parsed_data.get('amount_in_digits', ''),
-            parsed_data.get('payer', ''),
+            parsed_data.get('party_name', ''),  # Now using 'party_name'
             parsed_data.get('account_number', ''),
             parsed_data.get('cheque_number', ''),
-            parsed_data.get('image_path', '')
+            parsed_data.get('image_path', ''),
+            parsed_data.get('receiver', ''),  # New 'receiver' field
+            new_party_code
         )
 
         cursor.execute(insert_query, record_to_insert)
         connection.commit()
         logger.info("Record inserted successfully into parsed_cheques_table")
+
+        return new_party_code  # Return the new party_code
 
     except (Exception, psycopg2.Error) as error:
         logger.error(f"Failed to insert record into parsed_cheques_table: {error}")

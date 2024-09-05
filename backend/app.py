@@ -60,14 +60,12 @@ def upload_file():
                 # Extract images from all pages
                 image_data = extract_images_from_pdf(file_content)
                 
-                # Process each image with Gemini API
                 result = []
                 for page in image_data:
                     gemini_response = get_text_from_gemini_api(page["image_data"])
                     
                     try:
                         json_string = gemini_response.replace("```json", "").replace("```", "").strip()
-                        # Parse the JSON string
                         parsed_data = json.loads(json_string)
                         
                     except json.JSONDecodeError:
@@ -90,7 +88,7 @@ def upload_file():
     except Exception as e:
         logger.error(f"Unexpected error in upload_file: {str(e)}")
         return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
-
+        
 @app.route('/api/save-to-db', methods=['POST'])
 def save_to_db():
     try:

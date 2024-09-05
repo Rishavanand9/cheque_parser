@@ -4,6 +4,8 @@ import './EnhancedChequeParse.css';
 import { saveAs } from 'file-saver';
 import { utils, write } from 'xlsx';
 import { Document, Page, View, Text, pdf } from '@react-pdf/renderer';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 /**
  * EnhancedChequeParse Component
@@ -18,17 +20,18 @@ const EnhancedChequeParse = () => {
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [allCheques, setAllCheques] = useState([]);
   // Configuration for cheque fields
   const fieldConfig = {
     party_code: { label: 'Party Code',  x: 850, y: 380, color: '#DC143C' },
     party_name: { label: 'Party Name',  x: 850, y: 430, color: '#4B0082' },
     date: { label: 'Date', x: 900, y: 30, color: '#3357FF' },
-    // id: { label: 'ID', x: 50, y: 30, color: '#FF5733' },
     bank_name: { label: 'Bank Name', x: 100, y: 10, color: '#20B2AA' },
     ifsc_code: { label: 'IFSC Code', x:500, y: 20, color: '#20B2AA' },
     amount_in_words: { label: 'Amount in Words', x: 300, y: 130, color: '#FF33FF' },
     amount_in_digits: { label: 'Amount in Digits', x: 800, y: 180, color: '#33FFFF' },
-    payer: { label: 'Payer', x: 400, y: 70, color: '#FFA500' },
+    reciever: { label: 'Reciever', x: 400, y: 70, color: '#FFA500' },
     account_number: { label: 'Account Number', x: 300, y: 220, color: '#8A2BE2' },
     cheque_number: { label: 'Cheque Number', x: 600, y: 400, color: '#20B2AA' },
   };
@@ -43,9 +46,8 @@ const EnhancedChequeParse = () => {
   const handleFieldChange = useCallback((field, value) => {
     setFields(prevFields => ({
       ...prevFields,
-      [field]: value
+      [field]: { ...prevFields[field], value }
     }));
-    // eslint-disable-next-line
   }, []);
 
   useEffect(() => {
@@ -259,6 +261,49 @@ const EnhancedChequeParse = () => {
     saveAs(blob, "cheque_data.pdf");
   };
 
+
+  const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return `${d.getDate().toString().padStart(2, '0')}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getFullYear()}`;
+  };
+
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    const day = parseInt(dateString.substring(0, 2), 10);
+    const month = parseInt(dateString.substring(2, 4), 10) - 1;
+    const year = parseInt(dateString.substring(4, 8), 10);
+    return new Date(year, month, day);
+  };
+
+  useEffect(() => {
+    fetchAllCheques();
+  }, []);
+
+  const fetchAllCheques = async () => {
+    try {
+      const response = await fetch('http://172.105.50.148:5050/api/get-all-cheques');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.status === 'success') {
+        setAllCheques(data.data);
+      } else {
+        throw new Error(data.message || 'Failed to fetch cheques.');
+      }
+    } catch (error) {
+      console.error('Fetch error:', error);
+      setError(`Error fetching cheques: ${error.message}`);
+    }
+  };
+
+  const filteredCheques = allCheques.filter(cheque =>
+    Object.values(cheque).some(value => 
+      value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
+
   function s2ab(s) {
     const buf = new ArrayBuffer(s.length);
     const view = new Uint8Array(buf);
@@ -310,15 +355,24 @@ const EnhancedChequeParse = () => {
                     return(
                     <div key={field} className="input-group">
                       <label htmlFor={field}>{config.label}</label>
+                      {field === 'date' ? (
+                      <DatePicker
+                        selected={parseDate(fields[field]?.value)}
+                        onChange={(date) => handleFieldChange(field, formatDate(date))}
+                        dateFormat="ddMMyyyy"
+                        className="input-field"
+                        style={{ borderColor: config.color }}
+                      />
+                    ) : (
                       <input
                         id={field}
                         type="text"
-                        disabled
-                        value={fields[field]['value'] || ''}
+                        value={fields[field]?.value || ''}
                         onChange={(e) => handleFieldChange(field, e.target.value)}
                         className="input-field"
                         style={{ borderColor: config.color }}
                       />
+                    )}
                     </div>
                   )}
                   )}
@@ -349,6 +403,34 @@ const EnhancedChequeParse = () => {
             <p className="no-data">No data to display. Please parse a cheque first.</p>
           )}
         </section>
+        <section className="all-cheques-section">
+        <h2>All Parsed Cheques</h2>
+        <input
+          type="text"
+          placeholder="Search cheques..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="search-input"
+        />
+        <table className="cheques-table">
+          <thead>
+            <tr>
+              {Object.keys(fieldConfig).map(field => (
+                <th key={field}>{fieldConfig[field].label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredCheques.map((cheque, index) => (
+              <tr key={index}>
+                {Object.keys(fieldConfig).map(field => (
+                  <td key={field}>{cheque[field]}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
       </main>
     </div>
   );
