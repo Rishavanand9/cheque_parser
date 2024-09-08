@@ -13,7 +13,7 @@ from pdf2image import convert_from_bytes
 import json
 
 # Import the database functions
-from database_utils import insert_parsed_cheque, get_all_parsed_cheques
+from database_utils import insert_parsed_cheque, get_all_parsed_cheques, get_party_code_by_account_number
 
 # Import the Gemini API function
 from gemini import get_text_from_gemini_api
@@ -67,6 +67,14 @@ def upload_file():
                     try:
                         json_string = gemini_response.replace("```json", "").replace("```", "").strip()
                         parsed_data = json.loads(json_string)
+                        
+                        # Fetch or generate party code
+                        account_number = parsed_data.get('account_number', {}).get('value', '')
+                        party_code = get_party_code_by_account_number(account_number)
+                        if not party_code:
+                            party_code = insert_parsed_cheque(parsed_data)
+                        
+                        parsed_data['party_code'] = {'value': party_code, 'confidence': 1.0}
                         
                     except json.JSONDecodeError:
                         logger.error(f"Failed to parse Gemini API response as JSON: {gemini_response}")

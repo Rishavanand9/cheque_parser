@@ -50,6 +50,8 @@ const EnhancedChequeParse = () => {
     }));
   }, []);
 
+  const API_URL = process.env.REACT_APP_API_URL;
+
   useEffect(() => {
     if (results.length > 0 && results[currentPage].image_data) {
       const svg = d3.select(svgRef.current);
@@ -159,7 +161,7 @@ const EnhancedChequeParse = () => {
     setError(null);
 
     try {
-      const response = await fetch('http://172.105.50.148:5050/api/parse-cheque', {
+      const response = await fetch(`${API_URL}/api/parse-cheque`, {
         method: 'POST',
         body: formData,
       });
@@ -194,7 +196,7 @@ const EnhancedChequeParse = () => {
       const updatedResults = [...results];
       updatedResults[currentPage].extracted_data = fields;
 
-      const response = await fetch('http://172.105.50.148:5050/api/save-to-db', {
+      const response = await fetch(`${API_URL}/api/save-to-db`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -265,7 +267,7 @@ const EnhancedChequeParse = () => {
   const formatDate = (date) => {
     if (!date) return '';
     const d = new Date(date);
-    return `${d.getDate().toString().padStart(2, '0')}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getFullYear()}`;
+    return `${d.getDate()?.toString().padStart(2, '0')}${(d.getMonth() + 1)?.toString().padStart(2, '0')}${d.getFullYear()}`;
   };
 
   const parseDate = (dateString) => {
@@ -282,7 +284,7 @@ const EnhancedChequeParse = () => {
 
   const fetchAllCheques = async () => {
     try {
-      const response = await fetch('http://172.105.50.148:5050/api/get-all-cheques');
+      const response = await fetch(`${API_URL}/api/get-all-cheques`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -300,7 +302,7 @@ const EnhancedChequeParse = () => {
 
   const filteredCheques = allCheques.filter(cheque =>
     Object.values(cheque).some(value => 
-      value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+      value?.toString()?.toLowerCase()?.includes(searchTerm.toLowerCase())
     )
   );
 

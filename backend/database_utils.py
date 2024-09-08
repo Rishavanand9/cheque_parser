@@ -1,8 +1,8 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import logging
-import hashlib
-import uuid
+import random
+import string
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,9 @@ def get_database_connection():
         logger.error(f"Error while connecting to PostgreSQL: {error}")
         raise
 
+def generate_party_code():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+
 def insert_parsed_cheque(parsed_data):
     connection = None
     try:
@@ -37,7 +40,12 @@ def insert_parsed_cheque(parsed_data):
             return existing_party_code[0]  # Return the existing party_code
 
         # Generate a unique party_code if account number doesn't exist
-        new_party_code = str(uuid.uuid4())
+        new_party_code = generate_party_code()
+        while True:
+            cursor.execute("SELECT 1 FROM parsed_cheques_table WHERE party_code = %s", (new_party_code,))
+            if not cursor.fetchone():
+                break
+            new_party_code = generate_party_code()
 
         insert_query = """
         INSERT INTO parsed_cheques_table 
@@ -52,11 +60,11 @@ def insert_parsed_cheque(parsed_data):
             parsed_data.get('ifsc_code', ''),
             parsed_data.get('amount_in_words', ''),
             parsed_data.get('amount_in_digits', ''),
-            parsed_data.get('party_name', ''),  # Now using 'party_name'
+            parsed_data.get('party_name', ''),
             parsed_data.get('account_number', ''),
             parsed_data.get('cheque_number', ''),
             parsed_data.get('image_path', ''),
-            parsed_data.get('receiver', ''),  # New 'receiver' field
+            parsed_data.get('receiver', ''),
             new_party_code
         )
 
@@ -92,6 +100,30 @@ def get_all_parsed_cheques():
 
     except (Exception, psycopg2.Error) as error:
         logger.error(f"Error retrieving records from parsed_cheques_table: {error}")
+        raise
+    finally:
+        if connection:
+            cursor.close()
+            connection.close()
+            logger.info("PostgreSQL connection is closed")
+
+def get_party_code_by_account_number(account_number):
+    connection = None
+    try:
+        connection = get_database_connection()
+        cursor = connection.cursor()
+
+        query = "SELECT party_code FROM parsed_cheques_table WHERE account_number = %s"
+        cursor.execute(query, (account_number,))
+        result = cursor.fetchone()
+
+        if result:
+            return result[0]
+        else:
+            return None
+
+    except (Exception, psycopg2.Error) as error:
+        logger.error(f"Error retrieving party_code for account number {account_number}: {error}")
         raise
     finally:
         if connection:
