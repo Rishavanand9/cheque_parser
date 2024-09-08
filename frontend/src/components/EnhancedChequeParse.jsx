@@ -12,7 +12,7 @@ import 'react-datepicker/dist/react-datepicker.css';
  * 
  * This component provides a comprehensive interface for parsing cheques,
  * visualizing the results, and allowing users to edit the extracted data.
- */
+*/
 const EnhancedChequeParse = () => {
   // State declarations
   const [file, setFile] = useState(null);
@@ -22,6 +22,8 @@ const EnhancedChequeParse = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [allCheques, setAllCheques] = useState([]);
+  const [editedFields, setEditedFields] = useState([]);
+  
   // Configuration for cheque fields
   const fieldConfig = {
     party_code: { label: 'Party Code',  x: 850, y: 380, color: '#DC143C' },
@@ -40,15 +42,18 @@ const EnhancedChequeParse = () => {
     Object.keys(fieldConfig).reduce((acc, key) => ({ ...acc, [key]: '' }), {})
   );
 
-  const svgRef = useRef(null);
-  const inputRefs = useRef({});
-
+  const svgRef = useRef(null)
+  const inputRefs = useRef({}); 
   const handleFieldChange = useCallback((field, value) => {
-    setFields(prevFields => ({
-      ...prevFields,
-      [field]: { ...prevFields[field], value }
-    }));
-  }, []);
+    setEditedFields(prevEditedFields => {
+      const newEditedFields = [...prevEditedFields];
+      if (!newEditedFields[currentPage]) {
+        newEditedFields[currentPage] = {};
+      }
+      newEditedFields[currentPage][field] = { value, confidence: 1 };
+      return newEditedFields;
+    });
+  }, [currentPage]);
 
   const API_URL = process.env.REACT_APP_API_URL;
 
@@ -193,9 +198,14 @@ const EnhancedChequeParse = () => {
    */
   const handleSaveToDb = async () => {
     try {
-      const updatedResults = [...results];
-      updatedResults[currentPage].extracted_data = fields;
-
+      const updatedResults = results.map((result, index) => ({
+        ...result,
+        extracted_data: {
+          ...result.extracted_data,
+          ...(editedFields[index] || {})
+        }
+      }));
+  
       const response = await fetch(`${API_URL}/api/save-to-db`, {
         method: 'POST',
         headers: {
@@ -203,12 +213,12 @@ const EnhancedChequeParse = () => {
         },
         body: JSON.stringify(updatedResults),
       });
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
-
+  
       const data = await response.json();
       if (data.status === 'success') {
         alert('Data saved to database successfully!');
@@ -228,12 +238,21 @@ const EnhancedChequeParse = () => {
 
   useEffect(() => {
     if (results.length > 0) {
-      setFields(results[currentPage].extracted_data || {});
+      const currentData = results[currentPage].extracted_data;
+      const editedData = editedFields[currentPage] || {};
+      setFields({
+        ...currentData,
+        ...editedData
+      });
     }
-  }, [currentPage, results]);
+  }, [currentPage, results, editedFields]);
 
   const exportToCSV = () => {
-    const ws = utils.json_to_sheet(results.map(r => r.extracted_data));
+    const exportData = results.map((r, index) => ({
+      ...r.extracted_data,
+      ...(editedFields[index] || {})
+    }));
+    const ws = utils.json_to_sheet(exportData);
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, "Cheque Data");
     const wbout = write(wb, { bookType: 'csv', type: 'binary' });
@@ -249,8 +268,8 @@ const EnhancedChequeParse = () => {
             {results.map((result, index) => (
               <View key={index}>
                 <Text>Page {index + 1}</Text>
-                {Object.entries(result.extracted_data).map(([key, value]) => (
-                  <Text key={key}>{key}: {value}</Text>
+                {Object.entries({...result.extracted_data, ...(editedFields[index] || {})}).map(([key, value]) => (
+                  <Text key={key}>{key}: {value.value}</Text>
                 ))}
               </View>
             ))}

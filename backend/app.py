@@ -72,7 +72,8 @@ def upload_file():
                         account_number = parsed_data.get('account_number', {}).get('value', '')
                         party_code = get_party_code_by_account_number(account_number)
                         if not party_code:
-                            party_code = insert_parsed_cheque(parsed_data)
+                            insert_data = {k: v.get('value', '') if isinstance(v, dict) else v for k, v in parsed_data.items()}
+                            party_code = insert_parsed_cheque(insert_data)
                         
                         parsed_data['party_code'] = {'value': party_code, 'confidence': 1.0}
                         
@@ -114,10 +115,13 @@ def save_to_db():
 def get_all_cheques():
     try:
         cheques = get_all_parsed_cheques()
+        if not cheques:
+            return jsonify({"status": "success", "data": [], "message": "No cheques found"}), 200
         return jsonify({"status": "success", "data": cheques})
     except Exception as e:
         logger.error(f"Error retrieving cheques from database: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5050, debug=True)
