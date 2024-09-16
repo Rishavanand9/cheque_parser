@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 def get_database_connection():
     try:
         connection = psycopg2.connect(
-            user="admin",
-            password="adminis@@33",
-            host="172.105.50.148",
+            user="vipul",
+            password="@Support4#",
+            host="127.0.0.1",
             port="5432",
             database="cheque_parser"
         )
