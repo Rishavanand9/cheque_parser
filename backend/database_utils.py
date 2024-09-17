@@ -3,17 +3,54 @@ from psycopg2.extras import RealDictCursor
 import logging
 import random
 import string
+import os
 
 logger = logging.getLogger(__name__)
+
+def init_db():
+    connection = None
+    try:
+        connection = get_database_connection()
+        cursor = connection.cursor()
+        
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS parsed_cheques_table (
+            id SERIAL PRIMARY KEY,
+            bank_name TEXT,
+            date TEXT,
+            ifsc_code TEXT,
+            amount_in_words TEXT,
+            amount_in_digits TEXT,
+            party_name TEXT,
+            account_number TEXT,
+            cheque_number TEXT,
+            image_path TEXT,
+            receiver TEXT,
+            party_code TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+        
+        cursor.execute(create_table_query)
+        connection.commit()
+        logger.info("Database table initialized successfully")
+    except (Exception, psycopg2.Error) as error:
+        logger.error(f"Error initializing database table: {error}")
+        raise
+    finally:
+        if connection:
+            cursor.close()
+            connection.close()
+
 
 def get_database_connection():
     try:
         connection = psycopg2.connect(
-            user="vipul",
-            password="@Support4#",
-            host="127.0.0.1",
-            port="5432",
-            database="cheque_parser"
+            user=os.getenv("POSTGRES_USER", "vipul"),
+            password=os.getenv("POSTGRES_PASSWORD", "@Support4#"),
+            host=os.getenv("POSTGRES_HOST", "db"),
+            port=os.getenv("POSTGRES_PORT", "5432"),
+            database=os.getenv("POSTGRES_DB", "cheque_parser")
         )
         logger.info("Successfully connected to the database")
         return connection
@@ -130,3 +167,6 @@ def get_party_code_by_account_number(account_number):
             cursor.close()
             connection.close()
             logger.info("PostgreSQL connection is closed")
+
+
+init_db()
