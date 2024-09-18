@@ -198,7 +198,7 @@ const EnhancedChequeParse = () => {
    */
   const handleSaveToDb = async () => {
     try {
-      const updatedResults = results.map((result, index) => ({
+      let updatedResults = results.map((result, index) => ({
         ...result,
         extracted_data: {
           ...result.extracted_data,
@@ -206,6 +206,10 @@ const EnhancedChequeParse = () => {
         }
       }));
   
+      //Appending image path to Request obj
+      updatedResults = updatedResults.map(i => { return {...i, extracted_data: {...i.extracted_data, image_path: {confidence: 100, value: i.image_data} } }})
+
+
       const response = await fetch(`${API_URL}/api/save-to-db`, {
         method: 'POST',
         headers: {
