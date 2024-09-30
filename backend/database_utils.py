@@ -4,6 +4,8 @@ import logging
 import random
 import string
 import os
+from psycopg2.extras import execute_values
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +44,12 @@ def init_db():
             cursor.close()
             connection.close()
 
-
 def get_database_connection():
     try:
         connection = psycopg2.connect(
             user=os.getenv("POSTGRES_USER", "vipul"),
             password=os.getenv("POSTGRES_PASSWORD", "@Support4#"),
-            host=os.getenv("POSTGRES_HOST", "db"),
+            host=os.getenv("POSTGRES_HOST", "localhost"),
             port=os.getenv("POSTGRES_PORT", "5432"),
             database=os.getenv("POSTGRES_DB", "cheque_parser")
         )
@@ -84,11 +85,22 @@ def insert_parsed_cheque(parsed_data):
                 break
             new_party_code = generate_party_code()
 
+        # Handle large image_path data
+        image_path = parsed_data.get('image_path', '')
+        if image_path.startswith('data:image'):
+            # Extract base64 data
+            _, image_data = image_path.split(',', 1)
+            # Convert to bytes
+            image_bytes = base64.b64decode(image_data)
+        else:
+            image_bytes = image_path.encode('utf-8')
+
         insert_query = """
         INSERT INTO parsed_cheques_table 
         (bank_name, date, ifsc_code, amount_in_words, amount_in_digits, 
         party_name, account_number, cheque_number, image_path, receiver, party_code, created_at) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        VALUES %s
+        RETURNING id, length(image_path) as image_path_length
         """
         
         record_to_insert = (
@@ -100,16 +112,23 @@ def insert_parsed_cheque(parsed_data):
             parsed_data.get('party_name', ''),
             parsed_data.get('account_number', ''),
             parsed_data.get('cheque_number', ''),
-            parsed_data.get('image_path', ''),
+            psycopg2.Binary(image_bytes),  # Use Binary for large data
             parsed_data.get('receiver', ''),
-            new_party_code
+            new_party_code,
+            'NOW()'
         )
 
-        cursor.execute(insert_query, record_to_insert)
+        # Use execute_values for better performance with large data
+        execute_values(cursor, insert_query, [record_to_insert])
+        inserted_row = cursor.fetchone()
         connection.commit()
+
+        # Debug: Print inserted row details
+        logger.debug(f"Inserted row: id={inserted_row[0]}, image_path_length={inserted_row[1]}")
+
         logger.info("Record inserted successfully into parsed_cheques_table")
 
-        return new_party_code  # Return the new party_code
+        return new_party_code
 
     except (Exception, psycopg2.Error) as error:
         logger.error(f"Failed to insert record into parsed_cheques_table: {error}")
