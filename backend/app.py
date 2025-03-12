@@ -5,8 +5,6 @@ from werkzeug.utils import secure_filename
 import os
 import logging
 import time
-from google.cloud import documentai
-from google.api_core.client_options import ClientOptions
 import io
 import re
 from pdf2image import convert_from_bytes
@@ -112,15 +110,21 @@ def save_to_db():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/get-all-cheques', methods=['GET'])
-def get_all_cheques():
+def get_all_cheques_route():
     try:
-        cheques = get_all_parsed_cheques()
-        if not cheques:
-            return jsonify({"status": "success", "data": [], "message": "No cheques found"}), 200
-        return jsonify({"status": "success", "data": cheques})
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        records = get_all_parsed_cheques(start_date, end_date)
+        return jsonify({
+            'status': 'success',
+            'data': records
+        })
     except Exception as e:
-        logger.error(f"Error retrieving cheques from database: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 
 if __name__ == '__main__':

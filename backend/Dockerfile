@@ -17,12 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Debugging steps
 RUN pip list
 RUN pip show google-cloud-documentai
-RUN python -c "import sys; print(sys.path)"
+RUN python -c "import sys; print(sys.path)"  
 RUN find /usr/local/lib/python3.9/site-packages/google -name '*.py' | grep documentai
 
 # Copy the current directory contents into the container at /app
 COPY . .
-COPY .env .
 
 # Make port 5051 available to the world outside this container
 EXPOSE 5051

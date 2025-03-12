@@ -1,10 +1,8 @@
 import base64
 import os
 import google.generativeai as genai
-from dotenv import load_dotenv
 
-load_dotenv()
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_API_KEY = ""
 
 def get_text_from_gemini_api(image_data):
     print("Gemini is processing the image")

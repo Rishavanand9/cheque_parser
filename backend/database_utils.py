@@ -141,14 +141,34 @@ def insert_parsed_cheque(parsed_data):
             connection.close()
             logger.info("PostgreSQL connection is closed")
 
-def get_all_parsed_cheques():
+def get_all_parsed_cheques(start_date=None, end_date=None):
     connection = None
     try:
         connection = get_database_connection()
         cursor = connection.cursor(cursor_factory=RealDictCursor)
 
-        select_query = "SELECT * FROM parsed_cheques_table ORDER BY created_at DESC"
-        cursor.execute(select_query)
+        select_query = """
+            SELECT * FROM parsed_cheques_table 
+            WHERE 1=1
+            {}
+            ORDER BY created_at DESC
+        """
+        
+        params = []
+        date_conditions = []
+        
+        if start_date:
+            date_conditions.append("created_at >= %s")
+            params.append(start_date)
+            
+        if end_date:
+            date_conditions.append("created_at <= %s")
+            params.append(end_date)
+            
+        date_filter = f"AND {' AND '.join(date_conditions)}" if date_conditions else ""
+        final_query = select_query.format(date_filter)
+        
+        cursor.execute(final_query, params)
         records = cursor.fetchall()
 
         logger.info(f"Retrieved {len(records)} records from parsed_cheques_table")

@@ -23,6 +23,10 @@ const EnhancedChequeParse = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [allCheques, setAllCheques] = useState([]);
   const [editedFields, setEditedFields] = useState([]);
+  const [dateRange, setDateRange] = useState({
+    startDate: null,
+    endDate: null
+  });
   
   // Configuration for cheque fields
   const fieldConfig = {
@@ -104,7 +108,7 @@ const EnhancedChequeParse = () => {
 
         const input = foreignObject.append("xhtml:input")
           .attr("type", "text")
-          .attr("value", fields[field]['value'] || '')
+          .attr("value", fields?.[field]?.['value'] || '')
           .style("width", "100%")
           .style("height", "100%")
           .style("font-size", "12px")
@@ -252,15 +256,23 @@ const EnhancedChequeParse = () => {
   }, [currentPage, results, editedFields]);
 
   const exportToCSV = () => {
-    const exportData = results.map((r, index) => ({
-      ...r.extracted_data,
-      ...(editedFields[index] || {})
-    }));
+    const exportData = results.map((r, index) => {
+      const extractedData = r.extracted_data || {};
+      const editedData = editedFields[index] || {};
+      
+      // Create a flattened object with just the values
+      return Object.keys(fieldConfig).reduce((acc, field) => {
+        const fieldData = editedData[field] || extractedData[field] || {};
+        acc[field] = fieldData.value || '';
+        return acc;
+      }, {});
+    });
+
     const ws = utils.json_to_sheet(exportData);
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, "Cheque Data");
     const wbout = write(wb, { bookType: 'csv', type: 'binary' });
-    saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), "cheque_data.csv");
+    saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), `cheque_data${Date.now()}.csv`);
   };
 
   const exportToPDF = async () => {
@@ -303,11 +315,21 @@ const EnhancedChequeParse = () => {
 
   useEffect(() => {
     fetchAllCheques();
-  }, []);
+  }, [dateRange]);
 
   const fetchAllCheques = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/get-all-cheques`);
+      const params = new URLSearchParams();
+      if (dateRange.startDate) {
+        params.append('start_date', dateRange.startDate.toISOString());
+      }
+      if (dateRange.endDate) {
+        params.append('end_date', dateRange.endDate.toISOString());
+      }
+
+      const url = `${API_URL}/api/get-all-cheques${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await fetch(url);
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -430,13 +452,44 @@ const EnhancedChequeParse = () => {
         </section>
         <section className="all-cheques-section">
         <h2>All Parsed Cheques</h2>
-        <input
-          type="text"
-          placeholder="Search cheques..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
-        />
+        <div className="filters">
+          <div className="date-filters">
+            <div className="date-picker-container">
+              <label>Start Date:</label>
+              <DatePicker
+                selected={dateRange.startDate}
+                onChange={(date) => setDateRange(prev => ({ ...prev, startDate: date }))}
+                selectsStart
+                startDate={dateRange.startDate}
+                endDate={dateRange.endDate}
+                className="date-input"
+                placeholderText="Select start date"
+                isClearable
+              />
+            </div>
+            <div className="date-picker-container">
+              <label>End Date:</label>
+              <DatePicker
+                selected={dateRange.endDate}
+                onChange={(date) => setDateRange(prev => ({ ...prev, endDate: date }))}
+                selectsEnd
+                startDate={dateRange.startDate}
+                endDate={dateRange.endDate}
+                minDate={dateRange.startDate}
+                className="date-input"
+                placeholderText="Select end date"
+                isClearable
+              />
+            </div>
+          </div>
+          <input
+            type="text"
+            placeholder="Search cheques..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="search-input"
+          />
+        </div>
         <table className="cheques-table">
           <thead>
             <tr>

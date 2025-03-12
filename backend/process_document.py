@@ -1,42 +1,7 @@
-# Copyright 2020 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-
-# [START documentai_process_document]
-# [START documentai_process_document_processor_version]
 from typing import Optional
 
 from google.api_core.client_options import ClientOptions
 from google.cloud import documentai  # type: ignore
-
-# TODO(developer): Uncomment these variables before running the sample.
-# project_id = "YOUR_PROJECT_ID"
-# location = "YOUR_PROCESSOR_LOCATION" # Format is "us" or "eu"
-# processor_id = "YOUR_PROCESSOR_ID" # Create processor before running sample
-# file_path = "/path/to/local/pdf"
-# mime_type = "application/pdf" # Refer to https://cloud.google.com/document-ai/docs/file-types for supported file types
-# field_mask = "text,entities,pages.pageNumber"  # Optional. The fields to return in the Document object.
-# processor_version_id = "YOUR_PROCESSOR_VERSION_ID" # Optional. Processor version to use
-
-
-{
-  "project_id": "763261229345",
-  "location": "us",
-  "processor_id": "f2cc8892ef0a7408",
-  "file_path": "/path/to/local/pdf",
-  "mime_type": "application/pdf"
-}
 
 def process_document_sample(
     project_id: str,

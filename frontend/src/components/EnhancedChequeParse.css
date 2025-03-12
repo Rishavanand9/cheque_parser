@@ -354,3 +354,45 @@ text {
 .cheques-table tr:nth-child(even) {
   background-color: #f8f8f8;
 }
+
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.date-filters {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.date-picker-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.date-input {
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 130px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+@media (max-width: 768px) {
+  .filters {
+    flex-direction: column;
+  }
+  
+  .date-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -9,8 +9,6 @@ services:
       - "80:80"
       
   backend:
-    env_file:
-      - .env
     build: ./backend
     ports:
       - "5051:5051"
