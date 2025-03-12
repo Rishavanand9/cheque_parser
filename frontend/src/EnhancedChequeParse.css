@@ -354,18 +354,26 @@ text {
 .cheques-table tr:nth-child(even) {
   background-color: #f8f8f8;
 }
-
 .filters {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
   flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  width: 70vw;
+  align-items: baseline;
+  background-color: var(--card-background);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .date-filters {
   display: flex;
   gap: 1rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .date-picker-container {
@@ -376,7 +384,7 @@ text {
 
 .date-input {
   padding: 0.5rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   width: 130px;
 }
@@ -384,15 +392,75 @@ text {
 .search-input {
   flex: 1;
   min-width: 200px;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
 }
 
-@media (max-width: 768px) {
-  .filters {
-    flex-direction: column;
-  }
-  
-  .date-filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
+.submit-button {
+  padding: 0.75rem 1.5rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color var(--transition-speed) ease, transform var(--transition-speed) ease;
+  font-size: 1rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.submit-button:hover {
+  background-color: var(--primary-dark);
+  transform: translateY(-2px);
+}
+
+/* Modern Table */
+.cheques-table {
+  width: 90vw;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.cheques-table th,
+.cheques-table td {
+  padding: 1rem;
+  text-align: left;
+}
+
+.cheques-table th {
+  background-color: var(--secondary-color);
+  color: white;
+  font-weight: bold;
+}
+
+.cheques-table tr:nth-child(even) {
+  background-color: #f8f8f8;
+}
+
+.cheques-table tr:hover {
+  background-color: rgba(52, 152, 219, 0.1);
+  transition: background-color var(--transition-speed) ease;
+}
+
+.fetch-button {
+  padding: 8px 16px;
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.fetch-button:hover {
+  background-color: #0052a3;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
