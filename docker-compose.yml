@@ -31,7 +31,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     ports:
-    - "5432:5432"
+    - "5433:5432"
 
   nginx:
     image: nginx:alpine
@@ -51,7 +51,7 @@ services:
     volumes:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
-    command: certonly --webroot -w /var/www/certbot --force-renewal --email your-email@example.com -d 127.0.0.1 --agree-tos
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email your-email@example.com -d 192.46.214.43 --agree-tos
 
 volumes:
   postgres_data:

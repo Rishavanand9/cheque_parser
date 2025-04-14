@@ -3,6 +3,7 @@ import { utils, write } from 'xlsx';
 import { Document, Page, View, Text, pdf } from '@react-pdf/renderer';
 import React from 'react';
 import { fieldConfig } from '../config/fieldConfig';
+import { formatDDMMYYYY } from './dateUtils';
 
 export const exportToCSV = (results) => {
   const exportData = results.map((r, index) => {
@@ -11,7 +12,7 @@ export const exportToCSV = (results) => {
     // Create a flattened object with just the values
     return Object.keys(fieldConfig).reduce((acc, field) => {
       const fieldData = extractedData[field] || {};
-      acc[field] = fieldData.value || '';
+      acc[field] = field === 'date' ? formatDDMMYYYY(fieldData.value) : fieldData.value || '';
       return acc;
     }, {});
   });

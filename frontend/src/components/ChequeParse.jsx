@@ -18,8 +18,8 @@ export const ChequeParse = () => {
   const [allCheques, setAllCheques] = useState([]);
   const [editedFields, setEditedFields] = useState([]);
   const [dateRange, setDateRange] = useState({
-    startDate: null,
-    endDate: null
+    startDate: new Date(),
+    endDate: new Date()
   });
   
   const [fields, setFields] = useState(
