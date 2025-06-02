@@ -25,11 +25,6 @@ services:
 
   db:
     image: postgres:13
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vipul"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
     environment:
       - POSTGRES_USER=vipul
       - POSTGRES_DB=cheque_parser

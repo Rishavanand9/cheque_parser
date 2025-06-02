@@ -2,7 +2,7 @@ import base64
 import os
 import google.generativeai as genai
 
-GEMINI_API_KEY = "AIzaSyBWBQYCoxQn2gD6Cu0HIdidkdj8EYzf2Kk"
+# GEMINI_API_KEY = "AIzaSyBWBQYCoxQn2gD6Cu0HIdidkdj8EYzf2Kk"
 
 def get_text_from_gemini_api(image_data):
     print("Gemini is processing the image")
