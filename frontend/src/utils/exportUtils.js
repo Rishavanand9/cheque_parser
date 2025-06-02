@@ -8,7 +8,7 @@ import { formatDDMMYYYY } from './dateUtils';
 export const exportToCSV = (results) => {
   const exportData = results.map((r, index) => {
     const extractedData = r.extracted_data || {};
-    
+
     // Create a flattened object with just the values
     return Object.keys(fieldConfig).reduce((acc, field) => {
       const fieldData = extractedData[field] || {};
@@ -44,7 +44,9 @@ export const exportToPDF = async (results) => {
   );
 
   const blob = await pdf(<MyDocument />).toBlob();
-  saveAs(blob, "cheque_data.pdf");
+  const dateString = new Date().toISOString().split('T')[0];
+  const fileName = `cheque_data_${dateString}.pdf`;
+  saveAs(blob, fileName);
 };
 
 function s2ab(s) {

@@ -59,7 +59,8 @@ const EnhancedChequeParse = () => {
     });
   }, [currentPage]);
 
-  const API_URL = 'http://127.0.0.1:5051';
+  // const API_URL = 'http://127.0.0.1:5051';
+  const API_URL = process.env.REACT_APP_API_URL;
 
   useEffect(() => {
     if (results.length > 0 && results[currentPage].image_data) {
@@ -295,7 +296,9 @@ const EnhancedChequeParse = () => {
     );
 
     const blob = await pdf(<MyDocument />).toBlob();
-    saveAs(blob, "cheque_data.pdf");
+    const dateString = new Date().toISOString().split('T')[0];
+    const fileName = `cheque_data_${dateString}.pdf`;
+    saveAs(blob, fileName);
   };
 
 

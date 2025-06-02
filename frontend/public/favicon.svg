@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect x="4" y="16" width="40" height="24" rx="2" ry="2" fill="#007ACC" />
+  <text x="8" y="28" font-family="Arial" font-size="10" fill="#ffffff">$</text>
+  <line x1="16" y1="24" x2="38" y2="24" stroke="#ffffff" stroke-width="1.5" />
+  <line x1="16" y1="30" x2="38" y2="30" stroke="#ffffff" stroke-width="1.5" />
+
+  <!-- Magnifying glass -->
+  <circle cx="44" cy="40" r="6" stroke="#333" stroke-width="2" fill="none" />
+  <line x1="48" y1="44" x2="54" y2="50" stroke="#333" stroke-width="2" />
+</svg>

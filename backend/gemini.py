@@ -2,7 +2,7 @@ import base64
 import os
 import google.generativeai as genai
 
-GEMINI_API_KEY = ""
+GEMINI_API_KEY = "AIzaSyBWBQYCoxQn2gD6Cu0HIdidkdj8EYzf2Kk"
 
 def get_text_from_gemini_api(image_data):
     print("Gemini is processing the image")
@@ -23,7 +23,7 @@ Analyze the provided cheque image using multiple OCR techniques. Extract the fol
   "amount_in_words": "The cheque amount written in words",
   "amount_in_digits": "The cheque amount written in digits, usually ends with a /-",
   "reciever": "The name of the party involved in the transaction",
-  "account_number": "The account number from which the funds will be drawn",
+  "account_number": "The account number from which the funds will be drawn",q
   "cheque_number": "The unique 24 digit cheque number, typically found at the bottom of the cheque"
 
 Instructions for Analysis:

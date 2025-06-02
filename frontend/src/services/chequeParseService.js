@@ -2,7 +2,8 @@ export const parseChequePDF = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
   
-    const response = await fetch('http://127.0.0.1:5051/api/parse-cheque', {
+  const API_URL = process.env.REACT_APP_API_URL;
+    const response = await fetch(`${API_URL}/api/parse-cheque`, {
       method: 'POST',
       body: formData,
     });
