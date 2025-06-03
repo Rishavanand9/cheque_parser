@@ -20,8 +20,7 @@ services:
       - POSTGRES_PORT=5432
     restart: on-failure
     depends_on:
-      db: 
-        condition: service_healthy
+      - db
 
   db:
     image: postgres:13
