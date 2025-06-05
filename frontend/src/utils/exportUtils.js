@@ -20,9 +20,9 @@ export const exportToCSV = (results) => {
   const ws = utils.json_to_sheet(exportData);
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, "Cheque Data");
-  const wbout = write(wb, { bookType: 'xls', type: 'binary' });
+  const wbout = write(wb, { bookType: 'xlsx', type: 'binary' });
   const dateString = new Date().toISOString().split('T')[0];
-  saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), `cheque_data_${dateString}.xls`);
+  saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), `cheque_data_${dateString}.xlsx`);
 };
 
 export const exportToPDF = async (results) => {

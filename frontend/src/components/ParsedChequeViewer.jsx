@@ -22,6 +22,7 @@ export const ParsedChequeViewer = ({
     );
   }
 
+  console.log("logs---------------",results.length, currentPage)
   return (
     <section className="main-section">
       <h2>Parsed Cheque Data</h2>
