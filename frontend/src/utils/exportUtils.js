@@ -12,7 +12,7 @@ export const exportToCSV = (results) => {
     // Create a flattened object with just the values
     return Object.keys(fieldConfig).reduce((acc, field) => {
       const fieldData = extractedData[field] || {};
-      acc[field] = field === 'date' ? formatDDMMYYYY(fieldData.value) : fieldData.value || '';
+      acc[field] = field === 'created_at' ? formatDDMMYYYY(fieldData.value) : fieldData.value || '';
       return acc;
     }, {});
   });
